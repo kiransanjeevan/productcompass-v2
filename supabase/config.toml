@@ -1,0 +1,20 @@
+project_id = "ehihqgkkuualltuqwmfz"
+
+[auth]
+site_url = "https://productcompass-puce.vercel.app"
+additional_redirect_urls = ["https://productcompass-puce.vercel.app/**"]
+
+[functions.store-oauth-tokens]
+verify_jwt = false
+
+[functions.index-documents]
+verify_jwt = false
+
+[functions.search-documents]
+verify_jwt = false
+
+[functions.sync-calendar]
+verify_jwt = false
+
+[functions.prepare-meeting]
+verify_jwt = false
