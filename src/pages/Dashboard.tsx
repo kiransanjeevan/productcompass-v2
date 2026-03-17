@@ -239,13 +239,13 @@ const Dashboard = () => {
         {/* Widgets Grid */}
         <div className="grid md:grid-cols-2 gap-6">
           {/* Upcoming Meetings */}
-          <StaggerItem>
-            <PMCard hoverable>
+          <StaggerItem className="h-full">
+            <PMCard hoverable className="flex flex-col h-full">
               <PMCardHeader>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <PMCardTitle>Upcoming Meetings</PMCardTitle>
               </PMCardHeader>
-              <PMCardContent>
+              <PMCardContent className="flex-1">
                 {meetingsLoading ? (
                   <div className="space-y-3 py-2">
                     <SkeletonShimmer className="h-10 w-full" />
@@ -309,13 +309,13 @@ const Dashboard = () => {
           </StaggerItem>
 
           {/* Recent Searches */}
-          <StaggerItem>
-            <PMCard hoverable>
+          <StaggerItem className="h-full">
+            <PMCard hoverable className="flex flex-col h-full">
               <PMCardHeader>
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <PMCardTitle>Recent Searches</PMCardTitle>
               </PMCardHeader>
-              <PMCardContent>
+              <PMCardContent className="flex-1">
                 {recentSearches.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">

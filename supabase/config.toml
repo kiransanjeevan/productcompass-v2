@@ -1,8 +1,8 @@
-project_id = "ehihqgkkuualltuqwmfz"
+project_id = "umxpfhudmrqcwpeuveuq"
 
 [auth]
-site_url = "https://productcompass-puce.vercel.app"
-additional_redirect_urls = ["https://productcompass-puce.vercel.app/**"]
+site_url = "https://pmcompass.vercel.com"
+additional_redirect_urls = ["https://pmcompass.vercel.com/**"]
 
 [functions.store-oauth-tokens]
 verify_jwt = false

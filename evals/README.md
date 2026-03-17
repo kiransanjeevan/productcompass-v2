@@ -23,7 +23,7 @@ Then replace the `REPLACE_WITH_...` placeholders in `golden-dataset.json` with r
 ### 3. Run the evaluation
 
 ```bash
-export SUPABASE_URL="https://ehihqgkkuualltuqwmfz.supabase.co"
+export SUPABASE_URL="https://umxpfhudmrqcwpeuveuq.supabase.co"
 export SUPABASE_ANON_KEY="<your-anon-key>"
 export EVAL_USER_EMAIL="your-test-account@example.com"
 export EVAL_USER_PASSWORD="your-password"
