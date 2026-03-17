@@ -7,8 +7,8 @@ const corsHeaders = {
 };
 
 const BATCH_SIZE = 5;
-const CHUNK_SIZE = 1600;
-const CHUNK_OVERLAP = 400;
+const CHUNK_SIZE = 800;
+const CHUNK_OVERLAP = 200;
 const EMBEDDING_BATCH_SIZE = 20;
 
 const DRIVE_MIME_TYPES = [
@@ -99,9 +99,12 @@ function chunkProse(text: string, prefix: string, chunkSize: number, chunkOverla
         start += chunkSize - chunkOverlap;
       }
     } else {
-      // Flush current chunk and start new one
+      // Flush current chunk, then seed the next one with overlap from its tail
       chunks.push(prefix + currentChunk);
-      currentChunk = trimmed;
+      const overlapSeed = chunkOverlap > 0 && currentChunk.length > chunkOverlap
+        ? currentChunk.slice(-chunkOverlap)
+        : "";
+      currentChunk = overlapSeed ? overlapSeed + "\n\n" + trimmed : trimmed;
     }
   }
 

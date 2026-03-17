@@ -34,13 +34,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { query } = await req.json();
+    const body = await req.json();
+    const { query, threshold } = body;
     if (!query || typeof query !== "string") {
       return new Response(JSON.stringify({ error: "Missing or invalid query" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const matchThreshold = typeof threshold === "number" ? threshold : 0.5;
 
     const openaiKey = Deno.env.get("OPENAI_API_KEY")!;
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
@@ -78,7 +80,7 @@ Deno.serve(async (req) => {
     const { data: matches, error: matchError } = await serviceClient.rpc("match_documents", {
       query_embedding: queryEmbedding,
       match_count: 10,
-      match_threshold: 0.3,
+      match_threshold: matchThreshold,
       user_uuid: user.id,
     });
 

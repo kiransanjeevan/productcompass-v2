@@ -1,7 +1,6 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
   theme: {
@@ -103,6 +102,11 @@ export default {
         "card-hover": "var(--shadow-card-hover)",
         modal: "var(--shadow-modal)",
         focus: "var(--shadow-focus)",
+        glow: "var(--glow-primary)",
+        "glow-strong": "var(--glow-primary-strong)",
+      },
+      backgroundImage: {
+        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
       },
       spacing: {
         "4.5": "1.125rem",

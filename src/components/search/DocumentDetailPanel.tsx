@@ -56,11 +56,11 @@ const DocumentDetailPanel = ({ doc, open, onClose, query }: DocumentDetailPanelP
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="right" className="sm:max-w-md flex flex-col">
+      <SheetContent side="right" className="sm:max-w-md flex flex-col glass-strong border-l border-border">
         <SheetHeader className="text-left pr-8">
           <div className="flex items-center gap-3">
             {getFileIcon(doc.type)}
-            <SheetTitle className="text-lg">{doc.title}</SheetTitle>
+            <SheetTitle className="text-lg text-foreground">{doc.title}</SheetTitle>
           </div>
           <SheetDescription className="sr-only">Document details</SheetDescription>
         </SheetHeader>
@@ -94,7 +94,7 @@ const DocumentDetailPanel = ({ doc, open, onClose, query }: DocumentDetailPanelP
             <p className="text-xs text-muted-foreground">{doc.excerpts.length} matching passage{doc.excerpts.length !== 1 ? "s" : ""} found</p>
           )}
           {doc.excerpts?.map((excerpt, i) => (
-            <div key={i} className="bg-muted rounded-md p-3 flex gap-2">
+            <div key={i} className="bg-white/5 rounded-md p-3 flex gap-2 border border-white/10">
               <Quote className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
               <p className="text-sm text-foreground leading-relaxed">{excerpt}</p>
             </div>
@@ -102,7 +102,7 @@ const DocumentDetailPanel = ({ doc, open, onClose, query }: DocumentDetailPanelP
         </div>
 
         {/* Footer */}
-        <div className="pt-4 border-t border-border mt-4">
+        <div className="pt-4 border-t border-white/10 mt-4">
           <PMButton
             variant="primary"
             className="w-full gap-2"

@@ -635,12 +635,12 @@
     },
     {
       "id": "q41",
-      "query": "What was discussed about the mobile app in last week's meeting?",
+      "query": "What are the contract terms with our data center provider?",
       "category": "negative",
       "difficulty": "medium",
       "expected_doc_ids": [],
       "expected_answer_contains": [],
-      "notes": "No specific mobile app meeting discussion — competitor docs mention it but not a meeting about it"
+      "notes": "No vendor/supplier contract docs exist — legal/procurement territory not covered in the corpus"
     },
     {
       "id": "q42",

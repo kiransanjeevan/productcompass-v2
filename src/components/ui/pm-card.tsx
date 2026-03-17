@@ -3,16 +3,20 @@ import { cn } from "@/lib/utils";
 
 interface PMCardProps extends React.HTMLAttributes<HTMLDivElement> {
   hoverable?: boolean;
+  glass?: boolean;
 }
 
 const PMCard = React.forwardRef<HTMLDivElement, PMCardProps>(
-  ({ className, hoverable = false, ...props }, ref) => {
+  ({ className, hoverable = false, glass = true, ...props }, ref) => {
     return (
       <div
         ref={ref}
         className={cn(
-          "bg-card border border-border rounded-md p-5 shadow-card transition-all duration-200",
-          hoverable && "hover:shadow-card-hover hover:-translate-y-0.5 cursor-pointer",
+          "rounded-lg p-5 transition-all duration-200",
+          glass
+            ? "glass"
+            : "bg-card border border-border",
+          hoverable && "hover:shadow-glow hover:scale-[1.01] cursor-pointer",
           className
         )}
         {...props}
@@ -45,7 +49,7 @@ PMCardContent.displayName = "PMCardContent";
 
 const PMCardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("mt-4 pt-4 border-t border-border", className)} {...props} />
+    <div ref={ref} className={cn("mt-4 pt-4 border-t border-white/10", className)} {...props} />
   )
 );
 PMCardFooter.displayName = "PMCardFooter";

@@ -144,8 +144,8 @@ const CONCURRENCY = parseInt(Deno.env.get("EVAL_CONCURRENCY") || "3", 10);
 const PIPELINE_CONFIG = {
   embedding_model: "text-embedding-3-small",
   synthesis_model: "claude-haiku-4-5-20251001",
-  chunk_size: 1600,
-  match_threshold: 0.3,
+  chunk_size: 800,
+  match_threshold: 0.5,
   match_count: 10,
   max_tokens: 500,
   k: K,
@@ -193,7 +193,7 @@ function computePrecisionAtK(expectedDocIds: string[], retrievedDocIds: string[]
   }
   const topK = retrievedDocIds.slice(0, k);
   const found = expectedDocIds.filter((id) => topK.includes(id));
-  return found.length / k;
+  return topK.length > 0 ? found.length / topK.length : 0.0;
 }
 
 function computeReciprocalRank(expectedDocIds: string[], retrievedDocIds: string[]): number {
@@ -494,7 +494,7 @@ async function main() {
           "Content-Type": "application/json",
           apikey: SUPABASE_ANON_KEY!,
         },
-        body: JSON.stringify({ query: gq.query }),
+        body: JSON.stringify({ query: gq.query, threshold: PIPELINE_CONFIG.match_threshold }),
       });
 
       if (!res.ok) {

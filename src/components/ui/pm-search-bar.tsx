@@ -37,15 +37,15 @@ const PMSearchBar = React.forwardRef<HTMLInputElement, PMSearchBarProps>(
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           className={cn(
-            "h-14 w-full rounded-md border border-border bg-background pl-12 pr-16 text-base text-foreground placeholder:text-muted-foreground transition-all duration-200",
-            "focus:outline-none focus:border-primary focus:shadow-focus",
+            "h-14 w-full rounded-lg glass pl-12 pr-16 text-base text-foreground placeholder:text-muted-foreground/60 transition-all duration-200",
+            "focus:outline-none focus:shadow-glow",
             className
           )}
           {...props}
         />
         {showShortcut && (
           <div className="absolute right-5 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-            <span>⌘</span>
+            <span>{"\u2318"}</span>
             <span>K</span>
           </div>
         )}

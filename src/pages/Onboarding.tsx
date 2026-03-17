@@ -17,7 +17,6 @@ const Onboarding = () => {
 
   const totalSteps = 3;
 
-  // If already authenticated, redirect to dashboard
   useEffect(() => {
     if (!authLoading && user) {
       navigate("/dashboard");
@@ -35,8 +34,6 @@ const Onboarding = () => {
         setSigningIn(false);
         return;
       }
-
-      // Browser redirects to Google — we won't reach here
     } catch (err) {
       toast.error("Sign-in failed. Please try again.");
       console.error("OAuth error:", err);
@@ -61,16 +58,19 @@ const Onboarding = () => {
   };
 
   return (
-    <div className="min-h-screen bg-secondary-bg flex items-center justify-center p-4">
-      <div className="w-full max-w-[540px]">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-radial from-primary/8 via-transparent to-transparent pointer-events-none" />
+
+      <div className="w-full max-w-[540px] relative">
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm text-muted-foreground">Step {step} of {totalSteps}</span>
           </div>
-          <div className="h-1.5 bg-border rounded-full overflow-hidden">
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-primary rounded-full"
+              className="h-full rounded-full bg-gradient-to-r from-primary to-purple"
               initial={{ width: 0 }}
               animate={{ width: `${(step / totalSteps) * 100}%` }}
               transition={{ duration: 0.3 }}
@@ -85,7 +85,7 @@ const Onboarding = () => {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
           transition={{ duration: 0.3 }}
-          className="bg-card rounded-lg border border-border shadow-card p-8"
+          className="glass-strong rounded-lg p-8"
         >
           <AnimatePresence mode="wait">
             {/* Step 1: Welcome */}
@@ -105,7 +105,7 @@ const Onboarding = () => {
                   Let's get you set up in less than 2 minutes.
                 </p>
                 <PMButton variant="primary" size="lg" onClick={() => setStep(2)} className="w-full">
-                  Let's Go →
+                  Let's Go
                 </PMButton>
               </motion.div>
             )}
@@ -129,10 +129,10 @@ const Onboarding = () => {
                   {permissions.map((perm) => (
                     <div
                       key={perm.text}
-                      className="flex items-center gap-3 p-3 bg-secondary-bg rounded-md"
+                      className="flex items-center gap-3 p-3 glass rounded-md"
                     >
-                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-success/10 text-success">
-                        <Check className="h-4 w-4" />
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-success/10">
+                        <Check className="h-4 w-4 text-success" />
                       </div>
                       <div className="flex items-center gap-2">
                         <perm.icon className="h-4 w-4 text-muted-foreground" />
@@ -143,7 +143,7 @@ const Onboarding = () => {
                 </div>
 
                 <p className="text-small text-muted-foreground text-center mb-6">
-                  🔒 We never store your files. All searches happen in real-time.
+                  We never store your files. All searches happen in real-time.
                 </p>
 
                 <PMButton
@@ -198,7 +198,7 @@ const Onboarding = () => {
                     <button
                       key={prompt}
                       onClick={() => setSearchQuery(prompt)}
-                      className="px-3 py-1.5 text-sm bg-secondary-bg text-muted-foreground rounded-full hover:bg-muted hover:text-foreground transition-colors"
+                      className="px-3 py-1.5 text-sm glass text-muted-foreground rounded-full hover:text-foreground transition-colors"
                     >
                       {prompt}
                     </button>

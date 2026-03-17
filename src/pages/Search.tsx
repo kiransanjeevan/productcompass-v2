@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import Navbar from "@/components/layout/Navbar";
 import FeedbackModal from "@/components/search/FeedbackModal";
 import DocumentDetailPanel from "@/components/search/DocumentDetailPanel";
 import { PMButton } from "@/components/ui/pm-button";
 import { PMBadge } from "@/components/ui/pm-badge";
+import { StaggerContainer, StaggerItem } from "@/components/ui/stagger-children";
+import { SkeletonShimmer } from "@/components/ui/skeleton-shimmer";
 import { ArrowLeft, FileText, Presentation, Sheet, ExternalLink, Sparkles, X, Loader2, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -38,7 +39,6 @@ const Search = () => {
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q") || "";
   const { user } = useAuth();
-  const displayName = getUserDisplayName(user);
 
   const [results, setResults] = useState<DocumentResult[]>([]);
   const [aiAnswer, setAiAnswer] = useState("");
@@ -136,204 +136,191 @@ const Search = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar isAuthenticated userName={displayName} />
+    <div className="max-w-[1000px] mx-auto px-6 lg:px-8 py-8">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate("/dashboard")}
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Dashboard
+      </button>
 
-      <main className="max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          {/* Back Button */}
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
-          </button>
-
-          {/* Header */}
-          <div className="mb-6">
-            <div>
-              <h1 className="text-page-title text-foreground mb-1">
-                Results for: "{query}"
-              </h1>
-              {!loading && !error && (
-                <div className="flex items-center gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    Found {results.length} document{results.length !== 1 ? "s" : ""} · Ranked by relevance to your query
-                  </p>
-                  {aiAnswer && !showSummary && (
-                    <PMButton variant="secondary" size="sm" onClick={() => setShowSummary(true)} className="gap-1.5">
-                      <Sparkles className="h-3 w-3" />
-                      Show AI Summary
-                    </PMButton>
-                  )}
-                </div>
-              )}
-            </div>
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-page-title text-foreground mb-1">
+          Results for: "{query}"
+        </h1>
+        {!loading && !error && (
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-muted-foreground">
+              Found {results.length} document{results.length !== 1 ? "s" : ""} · Ranked by relevance
+            </p>
+            {aiAnswer && !showSummary && (
+              <PMButton variant="glass" size="sm" onClick={() => setShowSummary(true)} className="gap-1.5">
+                <Sparkles className="h-3 w-3" />
+                Show AI Summary
+              </PMButton>
+            )}
           </div>
+        )}
+      </div>
 
-          {/* Loading State */}
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-sm text-muted-foreground">Searching your documents...</p>
-            </div>
-          )}
+      {/* Loading State */}
+      {loading && (
+        <div className="space-y-4 py-8">
+          <SkeletonShimmer className="h-24 w-full rounded-lg" />
+          <SkeletonShimmer className="h-20 w-full rounded-lg" />
+          <SkeletonShimmer className="h-20 w-full rounded-lg" />
+        </div>
+      )}
 
-          {/* Error State */}
-          {error && !loading && (
-            <div className="flex items-center gap-3 p-4 rounded-md border border-error/20 bg-error/5 mb-6">
-              <AlertTriangle className="h-5 w-5 text-error shrink-0" />
-              <p className="text-sm text-foreground">{error}</p>
-            </div>
-          )}
+      {/* Error State */}
+      {error && !loading && (
+        <div className="flex items-center gap-3 p-4 rounded-lg glass mb-6" style={{ borderColor: "hsl(0 84% 60% / 0.3)" }}>
+          <AlertTriangle className="h-5 w-5 text-error shrink-0" />
+          <p className="text-sm text-foreground">{error}</p>
+        </div>
+      )}
 
-          {/* Empty State */}
-          {!loading && !error && results.length === 0 && query && (
-            <div className="text-center py-16">
-              <p className="text-muted-foreground mb-2">No documents matched your query.</p>
-              <p className="text-sm text-muted-foreground">Try a different search term or make sure your documents are indexed.</p>
-            </div>
-          )}
+      {/* Empty State */}
+      {!loading && !error && results.length === 0 && query && (
+        <div className="text-center py-16">
+          <p className="text-muted-foreground mb-2">No documents matched your query.</p>
+          <p className="text-sm text-muted-foreground">Try a different search term or make sure your documents are indexed.</p>
+        </div>
+      )}
 
-          {/* AI Summary */}
-          {!loading && !error && (
-            <AnimatePresence>
-              {showSummary && aiAnswer && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mb-6"
-                >
-                  <div className="bg-primary/5 border border-primary/20 rounded-md p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                        <span className="font-medium text-foreground">AI Summary</span>
-                      </div>
-                      <button
-                        onClick={() => setShowSummary(false)}
-                        className="p-1 hover:bg-primary/10 rounded transition-colors"
-                      >
-                        <X className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Based on {results.length} document{results.length !== 1 ? "s" : ""} about "{query}":
-                    </p>
-                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                      {aiAnswer}
-                    </p>
+      {/* AI Summary */}
+      {!loading && !error && (
+        <AnimatePresence>
+          {showSummary && aiAnswer && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-6"
+            >
+              <div className="glass rounded-lg p-5 border-l-2 border-l-purple">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-purple" />
+                    <span className="font-medium text-foreground">AI Summary</span>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  <button
+                    onClick={() => setShowSummary(false)}
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <X className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Based on {results.length} document{results.length !== 1 ? "s" : ""} about "{query}":
+                </p>
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                  {aiAnswer}
+                </p>
+              </div>
+            </motion.div>
           )}
+        </AnimatePresence>
+      )}
 
-          {/* Document Results */}
-          {!loading && !error && results.length > 0 && (
-            <div className="space-y-0">
-              {results.map((doc, index) => (
-                <motion.div
-                  key={doc.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="border-b border-border py-4 hover:bg-secondary-bg/50 -mx-4 px-4 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex gap-3 flex-1">
+      {/* Document Results */}
+      {!loading && !error && results.length > 0 && (
+        <StaggerContainer className="space-y-3">
+          {results.map((doc) => (
+            <StaggerItem key={doc.id}>
+              <div className="glass rounded-lg p-4 transition-all duration-200 hover:shadow-glow hover:scale-[1.005] group">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex gap-3 flex-1">
+                    <div className="mt-0.5 p-1.5 rounded-md bg-white/5 group-hover:bg-white/10 transition-colors">
                       {getFileIcon(doc.type)}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-card-title text-foreground hover:text-primary cursor-pointer">
-                          {doc.title}
-                        </h3>
-                        {(doc.lastEdited || doc.owner) && (
-                          <p className="text-small text-muted-foreground mt-1">
-                            {doc.lastEdited && `Last edited: ${doc.lastEdited}`}
-                            {doc.lastEdited && doc.owner && " • "}
-                            {doc.owner && `Owner: ${doc.owner}`}
-                          </p>
-                        )}
-                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                          {doc.snippet}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-card-title text-foreground group-hover:text-primary cursor-pointer transition-colors">
+                        {doc.title}
+                      </h3>
+                      {(doc.lastEdited || doc.owner) && (
+                        <p className="text-small text-muted-foreground mt-1">
+                          {doc.lastEdited && `Last edited: ${doc.lastEdited}`}
+                          {doc.lastEdited && doc.owner && " · "}
+                          {doc.owner && `Owner: ${doc.owner}`}
                         </p>
-                        {docSummaries[doc.id] && (
-                          <div className="mt-2 p-3 bg-primary/5 border border-primary/20 rounded text-sm text-foreground">
-                            <div className="flex items-center gap-1.5 mb-1 text-xs text-primary font-medium">
-                              <Sparkles className="h-3 w-3" />
-                              AI Summary
-                            </div>
-                            {docSummaries[doc.id]}
+                      )}
+                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                        {doc.snippet}
+                      </p>
+                      {docSummaries[doc.id] && (
+                        <div className="mt-2 p-3 glass rounded-md text-sm text-foreground border-l-2 border-l-purple">
+                          <div className="flex items-center gap-1.5 mb-1 text-xs text-purple font-medium">
+                            <Sparkles className="h-3 w-3" />
+                            AI Summary
                           </div>
-                        )}
-                        <div className="flex gap-2 mt-3">
-                          {doc.url && (
-                            <PMButton
-                              variant="ghost"
-                              size="sm"
-                              className="gap-1.5"
-                              onClick={() => window.open(doc.url, "_blank")}
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                              Open in Drive
-                            </PMButton>
-                          )}
+                          {docSummaries[doc.id]}
+                        </div>
+                      )}
+                      <div className="flex gap-2 mt-3">
+                        {doc.url && (
                           <PMButton
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleSummarizeDoc(doc)}
-                            disabled={summarizingDocId === doc.id}
                             className="gap-1.5"
+                            onClick={() => window.open(doc.url, "_blank")}
                           >
-                            {summarizingDocId === doc.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Sparkles className="h-3 w-3" />
-                            )}
-                            {summarizingDocId === doc.id ? "Summarizing..." : "Summarize"}
+                            <ExternalLink className="h-3 w-3" />
+                            Open in Drive
                           </PMButton>
-                          <PMButton variant="ghost" size="sm" onClick={() => setSelectedDoc(doc)}>
-                            View Details
-                          </PMButton>
-                        </div>
+                        )}
+                        <PMButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSummarizeDoc(doc)}
+                          disabled={summarizingDocId === doc.id}
+                          className="gap-1.5"
+                        >
+                          {summarizingDocId === doc.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3 w-3" />
+                          )}
+                          {summarizingDocId === doc.id ? "Summarizing..." : "Summarize"}
+                        </PMButton>
+                        <PMButton variant="ghost" size="sm" onClick={() => setSelectedDoc(doc)}>
+                          View Details
+                        </PMButton>
                       </div>
                     </div>
-                    <PMBadge variant={getScoreBadgeVariant(doc.matchScore)}>
-                      {doc.matchScore}% match
-                    </PMBadge>
                   </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
+                  <PMBadge variant={getScoreBadgeVariant(doc.matchScore)}>
+                    {doc.matchScore}% match
+                  </PMBadge>
+                </div>
+              </div>
+            </StaggerItem>
+          ))}
+        </StaggerContainer>
+      )}
 
-          {/* Feedback Link */}
-          {!loading && (
-            <div className="pt-6 text-center">
-              <button
-                onClick={() => setFeedbackOpen(true)}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors underline underline-offset-4"
-              >
-                Can't find what you need?
-              </button>
-            </div>
-          )}
+      {/* Feedback Link */}
+      {!loading && (
+        <div className="pt-6 text-center">
+          <button
+            onClick={() => setFeedbackOpen(true)}
+            className="text-sm text-muted-foreground hover:text-primary transition-colors underline underline-offset-4"
+          >
+            Can't find what you need?
+          </button>
+        </div>
+      )}
 
-          <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} query={query} />
-          <DocumentDetailPanel
-            doc={selectedDoc}
-            open={!!selectedDoc}
-            onClose={() => setSelectedDoc(null)}
-            query={query}
-          />
-        </motion.div>
-      </main>
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} query={query} />
+      <DocumentDetailPanel
+        doc={selectedDoc}
+        open={!!selectedDoc}
+        onClose={() => setSelectedDoc(null)}
+        query={query}
+      />
     </div>
   );
 };

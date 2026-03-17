@@ -24,7 +24,8 @@ dist-ssr
 *.sw?
 .vercel
 
-# Eval results (can be large, contain user data)
+# Eval secrets and results
+evals/.env
 evals/results/*.json
 
 # Eval data (CSV datasets, not code)

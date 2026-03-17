@@ -22,8 +22,6 @@ const Landing = () => {
         setSigningIn(false);
         return;
       }
-
-      // Browser redirects to Google — we won't reach here
     } catch (err) {
       toast.error("Sign-in failed. Please try again.");
       console.error("OAuth error:", err);
@@ -34,9 +32,9 @@ const Landing = () => {
   const features = [
     {
       icon: FileText,
-      title: "Find Documents Instantly",
+      title: "Search in Plain English",
       description:
-        "Search across your entire Google Drive using natural language. No more remembering exact file names or folder locations.",
+        "Ask questions like you would a colleague. PM Compass searches your Drive and synthesizes an answer from the most relevant docs.",
     },
     {
       icon: Calendar,
@@ -53,32 +51,36 @@ const Landing = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background glow effects */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-gradient-radial from-primary/8 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute top-1/3 right-0 w-[400px] h-[400px] bg-gradient-radial from-purple/5 via-transparent to-transparent pointer-events-none" />
+
       <Navbar />
 
       {/* Hero Section */}
-      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12 md:pt-24 md:pb-16">
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 md:pt-32 md:pb-24 relative">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.6 }}
           className="text-center max-w-3xl mx-auto"
         >
-          <h1 className="text-hero text-foreground mb-6">
-            Find any document.{" "}
-            <span className="block">Prepare for any meeting.</span>
+          <h1 className="text-5xl md:text-6xl font-bold leading-tight tracking-tight text-foreground mb-6">
+            Ask anything about{" "}
+            <span className="block text-gradient">your work. Get answers.</span>
           </h1>
-          <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-            PM Compass is your AI-powered knowledge assistant that searches across your
-            Google Workspace to surface exactly what you need, when you need it.
+          <p className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
+            PM Compass searches across your Google Workspace and synthesizes AI-powered
+            answers — so you spend less time hunting and more time shipping.
           </p>
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-4">
             <PMButton
               variant="hero"
               size="lg"
               onClick={handleGoogleSignIn}
               loading={signingIn}
-              className="gap-2"
+              className="gap-2 text-base px-8"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
@@ -112,16 +114,15 @@ const Landing = () => {
             onClick={() =>
               document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })
             }
-            className="mt-6 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="mt-8 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            See how it works ↓
+            See how it works
           </button>
         </motion.div>
-
       </section>
 
       {/* Features Section */}
-      <section id="features" className="bg-secondary-bg py-20">
+      <section id="features" className="py-24 relative">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {features.map((feature, index) => (
@@ -131,7 +132,7 @@ const Landing = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
                 viewport={{ once: true }}
-                className="text-center p-6"
+                className="text-center p-8 glass rounded-lg hover:shadow-glow transition-all duration-300"
               >
                 <div className="inline-flex items-center justify-center w-14 h-14 rounded-lg bg-primary/10 text-primary mb-4">
                   <feature.icon className="h-7 w-7" />
@@ -145,28 +146,30 @@ const Landing = () => {
       </section>
 
       {/* Trust Section */}
-      <section className="py-16 border-b border-border">
+      <section className="py-16">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-muted-foreground mb-6">
-            Files stay in Google. We index text snippets to power search.
-          </p>
-          <div className="flex flex-wrap justify-center gap-8">
-            {trustItems.map((item) => (
-              <div key={item.text} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <item.icon className="h-4 w-4 text-success" />
-                <span>{item.text}</span>
-              </div>
-            ))}
+          <div className="glass rounded-lg py-6 px-8">
+            <p className="text-center text-muted-foreground mb-4 text-sm">
+              Files stay in Google. We index text snippets to power search.
+            </p>
+            <div className="flex flex-wrap justify-center gap-8">
+              {trustItems.map((item) => (
+                <div key={item.text} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <item.icon className="h-4 w-4 text-success" />
+                  <span>{item.text}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8">
+      <footer className="py-8 border-t border-border">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} PM Compass. All rights reserved.
+              &copy; {new Date().getFullYear()} PM Compass. All rights reserved.
             </p>
             <div className="flex gap-6">
               <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

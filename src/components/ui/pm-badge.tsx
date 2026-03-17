@@ -7,14 +7,14 @@ const pmBadgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-muted text-muted-foreground",
-        success: "bg-success/10 text-success",
-        warning: "bg-warning/10 text-warning",
-        info: "bg-info/10 text-info",
-        purple: "bg-purple/10 text-purple",
-        high: "bg-success/10 text-success",
-        medium: "bg-info/10 text-info",
-        low: "bg-muted text-muted-foreground",
+        default: "bg-white/10 text-muted-foreground",
+        success: "bg-success/15 text-success",
+        warning: "bg-warning/15 text-warning",
+        info: "bg-info/15 text-info",
+        purple: "bg-purple/15 text-purple",
+        high: "bg-success/15 text-success",
+        medium: "bg-info/15 text-info",
+        low: "bg-white/10 text-muted-foreground",
       },
     },
     defaultVariants: {

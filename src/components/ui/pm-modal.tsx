@@ -35,7 +35,7 @@ const PMModal = ({ open, onClose, children, className, showCloseButton = true }:
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-foreground/50 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
           />
           <motion.div
@@ -44,7 +44,7 @@ const PMModal = ({ open, onClose, children, className, showCloseButton = true }:
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
             className={cn(
-              "relative z-50 w-full max-w-md bg-card rounded-lg shadow-modal p-6",
+              "relative z-50 w-full max-w-md glass-strong rounded-lg shadow-modal p-6",
               className
             )}
           >

@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "@/components/layout/Navbar";
 import { PMButton } from "@/components/ui/pm-button";
 import { PMBadge } from "@/components/ui/pm-badge";
 import { PMModal, PMModalHeader, PMModalTitle, PMModalDescription, PMModalContent, PMModalFooter } from "@/components/ui/pm-modal";
 import { PMInput } from "@/components/ui/pm-input";
+import { StaggerContainer, StaggerItem } from "@/components/ui/stagger-children";
 import { ArrowLeft, Check, AlertTriangle, Clock } from "lucide-react";
-import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,7 +24,7 @@ const Settings = () => {
   const [hasGoogleTokens, setHasGoogleTokens] = useState(false);
   const [lastIndexedAt, setLastIndexedAt] = useState<string | null>(null);
 
-  // Chunking strategy — restore from localStorage
+  // Chunking strategy
   const [chunkPreset, setChunkPreset] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("pm-compass-chunk-settings") || "{}");
@@ -45,7 +44,6 @@ const Settings = () => {
     } catch { return 400; }
   });
 
-  // Persist chunking settings to localStorage on change
   useEffect(() => {
     localStorage.setItem("pm-compass-chunk-settings", JSON.stringify({
       chunkPreset,
@@ -57,7 +55,6 @@ const Settings = () => {
   const displayName = getUserDisplayName(user);
   const userEmail = user?.email || "unknown";
 
-  // Fetch real document count and token status
   useEffect(() => {
     if (!user) return;
     const fetchStats = async () => {
@@ -165,12 +162,10 @@ const Settings = () => {
   const handleDeleteAccount = async () => {
     if (deleteConfirm !== "DELETE" || !user?.id) return;
     try {
-      // Delete all user data from app tables
       await supabase.from("document_chunks").delete().eq("user_id", user.id);
       await supabase.from("meetings").delete().eq("user_id", user.id);
       await supabase.from("oauth_tokens").delete().eq("user_id", user.id);
       await supabase.from("profiles").delete().eq("id", user.id);
-      // Note: auth.users record requires admin API — out of scope for client-side deletion
       await signOut();
       setDeleteModal(false);
       toast.success("Account data deleted");
@@ -187,16 +182,10 @@ const Settings = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar isAuthenticated userName={displayName} />
-
-      <main className="max-w-[600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          {/* Header */}
+    <div className="max-w-[600px] mx-auto px-6 lg:px-8 py-8">
+      <StaggerContainer>
+        {/* Header */}
+        <StaggerItem>
           <div className="flex items-center justify-between mb-8">
             <button
               onClick={() => navigate("/dashboard")}
@@ -207,23 +196,25 @@ const Settings = () => {
             </button>
             <h1 className="text-section-title text-foreground">Settings</h1>
           </div>
+        </StaggerItem>
 
-          {/* Connected Services */}
+        {/* Connected Services */}
+        <StaggerItem>
           <section className="mb-8">
             <h2 className="text-caption text-muted-foreground mb-4">CONNECTED SERVICES</h2>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {connectedServices.map((service) => (
                 <div
                   key={service.name}
-                  className="flex items-center justify-between p-4 bg-card border border-border rounded-md"
+                  className="flex items-center justify-between p-4 glass rounded-lg"
                 >
                   <div>
                     <p className="text-sm font-medium text-foreground">{service.name}</p>
                     {service.email && (
                       <p className="text-small text-muted-foreground">Connected as: {service.email}</p>
                     )}
-                    <div className="flex items-center gap-1 mt-1">
-                      <Check className={`h-3 w-3 ${hasGoogleTokens ? "text-success" : "text-muted-foreground"}`} />
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${hasGoogleTokens ? "bg-success" : "bg-muted-foreground"}`} />
                       <span className={`text-small ${hasGoogleTokens ? "text-success" : "text-muted-foreground"}`}>
                         {service.status}
                       </span>
@@ -242,13 +233,15 @@ const Settings = () => {
               ))}
             </div>
           </section>
+        </StaggerItem>
 
-          <hr className="border-border mb-8" />
+        <hr className="border-border mb-8" />
 
-          {/* Indexing Status */}
+        {/* Indexing Status */}
+        <StaggerItem>
           <section className="mb-8">
             <h2 className="text-caption text-muted-foreground mb-4">INDEXING STATUS</h2>
-            <div className="p-4 bg-card border border-border rounded-md space-y-3">
+            <div className="p-4 glass rounded-lg space-y-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-success" />
@@ -276,12 +269,12 @@ const Settings = () => {
               </div>
 
               {/* Chunking Strategy */}
-              <div className="space-y-2 pt-2 border-t border-border">
+              <div className="space-y-2 pt-2 border-t border-white/10">
                 <label className="text-sm font-medium text-foreground">Chunking Strategy</label>
                 <select
                   value={chunkPreset}
                   onChange={(e) => setChunkPreset(e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  className="w-full rounded-md border border-border bg-card/50 px-3 py-2 text-sm text-foreground"
                 >
                   <option value="precise">Precise (800 / 200 overlap)</option>
                   <option value="balanced">Balanced (1600 / 400 overlap)</option>
@@ -319,41 +312,47 @@ const Settings = () => {
               </PMButton>
             </div>
           </section>
+        </StaggerItem>
 
-          {/* Usage This Month */}
+        {/* Usage This Month */}
+        <StaggerItem>
           <section className="mb-8">
             <h2 className="text-caption text-muted-foreground mb-4">USAGE THIS MONTH</h2>
-            <div className="p-4 bg-card border border-border rounded-md space-y-3">
+            <div className="p-4 glass rounded-lg space-y-3">
               <PMBadge variant="success">Beta — Unlimited access</PMBadge>
             </div>
           </section>
+        </StaggerItem>
 
-          <hr className="border-border mb-8" />
+        <hr className="border-border mb-8" />
 
-          {/* Account */}
+        {/* Account */}
+        <StaggerItem>
           <section className="mb-8">
             <h2 className="text-caption text-muted-foreground mb-4">ACCOUNT</h2>
-            <div className="p-4 bg-card border border-border rounded-md space-y-3">
+            <div className="p-4 glass rounded-lg space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Email</span>
                 <span className="text-sm text-foreground">{userEmail}</span>
               </div>
             </div>
           </section>
+        </StaggerItem>
 
-          <hr className="border-border mb-8" />
+        <hr className="border-border mb-8" />
 
-          {/* Data & Privacy */}
+        {/* Data & Privacy */}
+        <StaggerItem>
           <section className="mb-8">
             <h2 className="text-caption text-muted-foreground mb-4">DATA & PRIVACY</h2>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-4 bg-card border border-border rounded-md">
+              <div className="flex items-center justify-between p-4 glass rounded-lg">
                 <span className="text-sm text-foreground">Clear search history</span>
                 <PMButton variant="secondary" size="sm" onClick={handleClearHistory}>
                   Clear
                 </PMButton>
               </div>
-              <div className="flex items-center justify-between p-4 bg-card border border-border rounded-md">
+              <div className="flex items-center justify-between p-4 glass rounded-lg border-error/20 hover:shadow-[0_0_20px_hsl(0_84%_60%/0.1)] transition-shadow">
                 <span className="text-sm text-foreground">Delete account and all data</span>
                 <PMButton variant="danger" size="sm" onClick={() => setDeleteModal(true)}>
                   Delete Account
@@ -361,15 +360,17 @@ const Settings = () => {
               </div>
             </div>
           </section>
+        </StaggerItem>
 
-          <hr className="border-border mb-8" />
+        <hr className="border-border mb-8" />
 
-          {/* Sign Out */}
+        {/* Sign Out */}
+        <StaggerItem>
           <PMButton variant="secondary" className="w-full" onClick={handleSignOut}>
             Sign Out
           </PMButton>
-        </motion.div>
-      </main>
+        </StaggerItem>
+      </StaggerContainer>
 
       {/* Disconnect Modal */}
       <PMModal open={!!disconnectModal} onClose={() => setDisconnectModal(null)}>

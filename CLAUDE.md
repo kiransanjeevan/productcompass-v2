@@ -1,4 +1,6 @@
-# PM Compass — Project Context
+# PM Compass v2 — Dark Premium Redesign
+
+**This is a separate fork** of PM Compass with a dark premium aesthetic (Linear/Vercel/Raycast style). The original project lives at `/Users/kiransanjeevan/AI/productcompass` — do NOT modify it from this project.
 
 ## What This Product Does
 

@@ -33,9 +33,9 @@ const PMTabs = ({ tabs, activeTab, onChange, className }: PMTabsProps) => {
             {tab.count !== undefined && (
               <span className={cn(
                 "text-xs px-1.5 py-0.5 rounded-full",
-                activeTab === tab.id 
-                  ? "bg-primary/10 text-primary" 
-                  : "bg-muted text-muted-foreground"
+                activeTab === tab.id
+                  ? "bg-primary/15 text-primary"
+                  : "bg-white/10 text-muted-foreground"
               )}>
                 {tab.count}
               </span>

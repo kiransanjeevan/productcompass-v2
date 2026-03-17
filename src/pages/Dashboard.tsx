@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "@/components/layout/Navbar";
-import { PMSearchBar } from "@/components/ui/pm-search-bar";
 import { PMCard, PMCardHeader, PMCardTitle, PMCardContent, PMCardFooter } from "@/components/ui/pm-card";
 import { PMButton } from "@/components/ui/pm-button";
+import { StaggerContainer, StaggerItem } from "@/components/ui/stagger-children";
+import { SkeletonShimmer } from "@/components/ui/skeleton-shimmer";
 import { Calendar, Clock, ChevronRight, Loader2, CheckCircle2, AlertTriangle, Search, CalendarDays } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -25,10 +25,8 @@ function formatMeetingTime(startTime: string): string {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const searchRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const [greeting, setGreeting] = useState("Good morning");
-  const [showTip, setShowTip] = useState(true);
 
   // Google API token state
   const [hasGoogleTokens, setHasGoogleTokens] = useState<boolean | null>(null);
@@ -75,29 +73,6 @@ const Dashboard = () => {
     };
     checkTokens();
   }, [user]);
-
-  // Keyboard shortcut for search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // Show pro tip toast
-  useEffect(() => {
-    if (showTip) {
-      const timer = setTimeout(() => {
-        toast.info("Pro tip: Press ⌘K to search anytime", { duration: 4000 });
-        setShowTip(false);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [showTip]);
 
   // Document indexing
   const runIndexing = useCallback(async (offset = 0) => {
@@ -189,88 +164,93 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar isAuthenticated userName={displayName} />
-
-      <main className="max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          {/* Greeting */}
+    <div className="max-w-[1000px] mx-auto px-6 lg:px-8 py-12">
+      <StaggerContainer>
+        {/* Greeting */}
+        <StaggerItem>
           <div className="text-center mb-8">
             <h1 className="text-page-title text-foreground mb-2">{greeting}, {displayName}</h1>
             <p className="text-body text-muted-foreground">Here's what's on your radar today</p>
           </div>
+        </StaggerItem>
 
-          {/* Google Connect Banner — shows if no tokens stored */}
-          {hasGoogleTokens === false && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="mb-6 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3"
-            >
+        {/* Google Connect Banner */}
+        {hasGoogleTokens === false && (
+          <StaggerItem>
+            <div className="mb-6 flex items-center justify-between rounded-lg glass px-4 py-3">
               <div className="flex items-center gap-3">
                 <Calendar className="h-4 w-4 text-primary" />
                 <span className="text-sm text-foreground">
                   Google tokens not detected. Try signing out and signing back in to reconnect.
                 </span>
               </div>
+            </div>
+          </StaggerItem>
+        )}
+
+        {/* Indexing Status Banner */}
+        <AnimatePresence>
+          {indexing && indexProgress && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-6 flex items-center gap-3 rounded-lg glass px-4 py-3"
+            >
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm text-foreground">
+                Indexing your documents... ({indexProgress.processed} of {indexProgress.total} processed)
+              </span>
             </motion.div>
           )}
+          {indexComplete && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-6 flex items-center gap-3 rounded-lg glass px-4 py-3"
+            >
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              <span className="text-sm text-foreground">
+                {indexProgress?.total || 0} documents indexed
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          {/* Indexing Status Banner */}
-          <AnimatePresence>
-            {indexing && indexProgress && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-6 flex items-center gap-3 rounded-lg border border-border bg-secondary-bg px-4 py-3"
-              >
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="text-sm text-foreground">
-                  Indexing your documents... ({indexProgress.processed} of {indexProgress.total} processed)
-                </span>
-              </motion.div>
-            )}
-            {indexComplete && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-6 flex items-center gap-3 rounded-lg border border-border bg-secondary-bg px-4 py-3"
-              >
-                <CheckCircle2 className="h-4 w-4 text-success" />
-                <span className="text-sm text-foreground">
-                  ✓ {indexProgress?.total || 0} documents indexed
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        {/* Search Trigger — opens command palette */}
+        <StaggerItem>
+          <button
+            onClick={() => {
+              // Dispatch Cmd+K to open command palette
+              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+            }}
+            className="w-full mb-12 h-14 rounded-lg glass flex items-center gap-3 px-5 text-left transition-all duration-200 hover:shadow-glow group"
+          >
+            <Search className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            <span className="text-base text-muted-foreground flex-1">Search your documents...</span>
+            <kbd className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+              <span>{"\u2318"}</span>
+              <span>K</span>
+            </kbd>
+          </button>
+        </StaggerItem>
 
-          {/* Search Bar */}
-          <div className="mb-12">
-            <PMSearchBar
-              ref={searchRef}
-              placeholder="Ask me anything..."
-              onSearch={handleSearch}
-            />
-          </div>
-
-          {/* Widgets Grid */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Upcoming Meetings */}
-            <PMCard>
+        {/* Widgets Grid */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Upcoming Meetings */}
+          <StaggerItem>
+            <PMCard hoverable>
               <PMCardHeader>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <PMCardTitle>Upcoming Meetings</PMCardTitle>
               </PMCardHeader>
               <PMCardContent>
                 {meetingsLoading ? (
-                  <div className="flex items-center justify-center py-6">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <div className="space-y-3 py-2">
+                    <SkeletonShimmer className="h-10 w-full" />
+                    <SkeletonShimmer className="h-10 w-full" />
+                    <SkeletonShimmer className="h-10 w-3/4" />
                   </div>
                 ) : meetingsError === "expired" ? (
                   <div className="flex items-center gap-2 py-4 text-sm text-warning">
@@ -289,19 +269,22 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {meetings.slice(0, 3).map((meeting) => (
+                    {meetings.slice(0, 3).map((meeting, index) => (
                       <button
                         key={meeting.id}
                         onClick={() => navigate(`/meeting-prep/${meeting.id}`)}
-                        className="w-full flex items-center justify-between p-2 -mx-2 rounded-md hover:bg-secondary-bg transition-colors group"
+                        className="w-full flex items-center justify-between p-2.5 -mx-2 rounded-md hover:bg-white/5 transition-colors group"
                       >
-                        <div className="flex flex-col items-start">
-                          <span className="text-sm text-foreground">{meeting.title}</span>
-                          {meeting.attendees && (
-                            <span className="text-xs text-muted-foreground">
-                              {Array.isArray(meeting.attendees) ? meeting.attendees.length : 0} attendees
-                            </span>
-                          )}
+                        <div className="flex items-center gap-3">
+                          <div className={`w-0.5 h-8 rounded-full ${index === 0 && isToday(new Date(meeting.start_time)) ? "bg-primary" : "bg-muted-foreground/30"}`} />
+                          <div className="flex flex-col items-start">
+                            <span className="text-sm text-foreground">{meeting.title}</span>
+                            {meeting.attendees && (
+                              <span className="text-xs text-muted-foreground">
+                                {Array.isArray(meeting.attendees) ? meeting.attendees.length : 0} attendees
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <span className="text-small text-muted-foreground group-hover:text-foreground flex items-center gap-1">
                           {formatMeetingTime(meeting.start_time)}
@@ -319,13 +302,15 @@ const Dashboard = () => {
               </PMCardContent>
               <PMCardFooter>
                 <button className="text-sm text-primary hover:underline">
-                  View full calendar →
+                  View full calendar
                 </button>
               </PMCardFooter>
             </PMCard>
+          </StaggerItem>
 
-            {/* Recent Searches */}
-            <PMCard>
+          {/* Recent Searches */}
+          <StaggerItem>
+            <PMCard hoverable>
               <PMCardHeader>
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <PMCardTitle>Recent Searches</PMCardTitle>
@@ -337,7 +322,7 @@ const Dashboard = () => {
                       <Search className="h-6 w-6 text-primary/60" />
                     </div>
                     <p className="text-sm font-medium text-foreground mb-1">No searches yet</p>
-                    <p className="text-xs text-muted-foreground">Try asking "Find my latest PRD" or press <kbd className="px-1.5 py-0.5 rounded bg-secondary-bg border border-border text-[10px] font-mono">⌘K</kbd></p>
+                    <p className="text-xs text-muted-foreground">Try asking "Find my latest PRD" or press <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[10px] font-mono">{"\u2318"}K</kbd></p>
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -345,8 +330,9 @@ const Dashboard = () => {
                       <button
                         key={search}
                         onClick={() => handleSearch(search)}
-                        className="w-full text-left p-2 -mx-2 rounded-md hover:bg-secondary-bg transition-colors group"
+                        className="w-full text-left p-2.5 -mx-2 rounded-md hover:bg-white/5 transition-colors group flex items-center gap-2"
                       >
+                        <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         <span className="text-sm text-foreground">"{search}"</span>
                       </button>
                     ))}
@@ -364,9 +350,9 @@ const Dashboard = () => {
                 )}
               </PMCardFooter>
             </PMCard>
-          </div>
-        </motion.div>
-      </main>
+          </StaggerItem>
+        </div>
+      </StaggerContainer>
     </div>
   );
 };
