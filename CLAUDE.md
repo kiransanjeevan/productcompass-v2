@@ -103,7 +103,7 @@ npm run test          # Vitest
 npm run lint          # ESLint
 
 # Deploy frontend
-vercel --prod                         # Deploy to pmcompass.vercel.com
+vercel --prod                         # Deploy to pmcompass.vercel.app
 
 # Edge functions
 supabase functions serve              # Local dev
@@ -127,7 +127,7 @@ deno run --allow-net --allow-read --allow-write --allow-env evals/run-evals.ts
 
 - **GitHub**: https://github.com/kiransanjeevan/productcompass-v2
 - **Supabase project**: umxpfhudmrqcwpeuveuq
-- **Production**: https://pmcompass.vercel.com
+- **Production**: https://pmcompass.vercel.app
 
 ## Guardrails
 

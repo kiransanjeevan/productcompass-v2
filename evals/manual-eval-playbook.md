@@ -286,7 +286,7 @@ For a fast first pass covering all 7 categories and 3 difficulty levels:
 
 ### For Each Query
 
-1. Go to **pmcompass.vercel.com** → sign in → Search page
+1. Go to **pmcompass.vercel.app** → sign in → Search page
 2. **Copy-paste** the query exactly as written from Tab 1 column B
 3. Wait for results to load
 4. In the **Results** tab, record:
