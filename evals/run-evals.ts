@@ -21,7 +21,9 @@
  *   EVAL_RUN_NAME          - Name prefix for this run (default: "baseline")
  *   EVAL_K                 - K value for Recall@K and Precision@K (default: 5)
  *   EVAL_SKIP_LLM_JUDGE    - Set to "true" to skip LLM-as-judge (saves API cost)
+ *   EVAL_LLM_JUDGE_MODEL   - Model for LLM-as-judge (default: claude-haiku-4-5-20251001)
  *   EVAL_SKIP_FAITHFULNESS  - Set to "true" to skip faithfulness scoring (saves API cost)
+ *   EVAL_FAITHFULNESS_MODEL - Model for faithfulness judge (default: claude-haiku-4-5-20251001)
  *   EVAL_MATCH_THRESHOLD   - Cosine similarity threshold (default: 0.5)
  *   EVAL_CONCURRENCY       - Max concurrent queries (default: 3)
  */
@@ -149,6 +151,7 @@ const RESULTS_DIR = Deno.env.get("EVAL_RESULTS_DIR") || "evals/results";
 const RUN_NAME = Deno.env.get("EVAL_RUN_NAME") || `threshold-${MATCH_THRESHOLD}`;
 const K = parseInt(Deno.env.get("EVAL_K") || "5", 10);
 const SKIP_LLM_JUDGE = Deno.env.get("EVAL_SKIP_LLM_JUDGE") === "true";
+const LLM_JUDGE_MODEL = Deno.env.get("EVAL_LLM_JUDGE_MODEL") || "claude-haiku-4-5-20251001";
 const SKIP_FAITHFULNESS = Deno.env.get("EVAL_SKIP_FAITHFULNESS") === "true";
 const FAITHFULNESS_MODEL = Deno.env.get("EVAL_FAITHFULNESS_MODEL") || "claude-haiku-4-5-20251001";
 const CONCURRENCY = parseInt(Deno.env.get("EVAL_CONCURRENCY") || "3", 10);
@@ -298,7 +301,7 @@ Respond with ONLY a JSON object (no markdown, no code fences):
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: LLM_JUDGE_MODEL,
         max_tokens: 150,
         temperature: 0,
         messages: [{ role: "user", content: prompt }],
@@ -380,7 +383,7 @@ Respond with ONLY a JSON object (no markdown, no code fences):
       },
       body: JSON.stringify({
         model: FAITHFULNESS_MODEL,
-        max_tokens: 1000,
+        max_tokens: 2000,
         temperature: 0,
         messages: [{ role: "user", content: prompt }],
       }),
