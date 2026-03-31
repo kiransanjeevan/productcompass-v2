@@ -76,12 +76,13 @@
       "difficulty": "easy",
       "expected_doc_ids": [
         "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg",
-        "1MKRxpnRk2YVWquHzIxLGEZ_bqsqhzwCQF0mQSBEJiBM"
+        "1MKRxpnRk2YVWquHzIxLGEZ_bqsqhzwCQF0mQSBEJiBM",
+        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA"
       ],
       "expected_answer_contains": [
         "churn"
       ],
-      "notes": "Should find both churn analysis sheets"
+      "notes": "Should find both churn analysis sheets + churn initiative (contains analysis data)"
     },
     {
       "id": "q03",
@@ -230,12 +231,13 @@
       "difficulty": "medium",
       "expected_doc_ids": [
         "1wVxtMwE-OIrn_Rm6tj0ByW2z91BHjL65BDC1XCljtNY",
-        "1JF8fRdqP6YN0wEsH1b3DYdFt9-RARb-3vLo17I-5aL4"
+        "1JF8fRdqP6YN0wEsH1b3DYdFt9-RARb-3vLo17I-5aL4",
+        "1a_c2XOO1Is5W7b7ex9wz_kMpDMieY3S09SWu3Gu5bt4"
       ],
       "expected_answer_contains": [
         "154"
       ],
-      "notes": "154 Enterprise accounts"
+      "notes": "154 Enterprise accounts — also in Investor FAQ"
     },
     {
       "id": "q14",
@@ -298,14 +300,15 @@
       "category": "factual_extraction",
       "difficulty": "medium",
       "expected_doc_ids": [
-        "1o9yECHFx-kQy_Sam7hWczKbDIhh1aQPCjUkYiX7IN20"
+        "1o9yECHFx-kQy_Sam7hWczKbDIhh1aQPCjUkYiX7IN20",
+        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA"
       ],
       "expected_answer_contains": [
         "annual",
         "discount",
         "30%"
       ],
-      "notes": "Option C recommended: increase annual discount from 20% to 30%"
+      "notes": "Option C recommended: increase annual discount from 20% to 30%. Churn Initiative also has pricing proposals."
     },
     {
       "id": "q19",
@@ -315,13 +318,14 @@
       "expected_doc_ids": [
         "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg",
         "1MKRxpnRk2YVWquHzIxLGEZ_bqsqhzwCQF0mQSBEJiBM",
-        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA"
+        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA",
+        "17i7gismezP8b5O_SI_vSjA3U1rz4B69pSt3vTLiKBeo"
       ],
       "expected_answer_contains": [
         "features",
         "budget"
       ],
-      "notes": "Churn is by reason code not tier. Top reasons: features (114), support (104), budget (104)"
+      "notes": "Churn is by reason code not tier. Top reasons: features (114), support (104), budget (104). NRR Analysis has tier-level churn data."
     },
     {
       "id": "q20",
@@ -373,12 +377,14 @@
       "category": "tabular_statistical",
       "difficulty": "easy",
       "expected_doc_ids": [
-        "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg"
+        "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg",
+        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA",
+        "1NI6hjMvgfeYpJWxRlIh3cPbIgOlZaZazN3lzINbtQeI"
       ],
       "expected_answer_contains": [
         "251"
       ],
-      "notes": "251 churn events in Q4 2025"
+      "notes": "251 churn events in Q4 2025 — also stated in Churn Initiative and Nov 15 Sync"
     },
     {
       "id": "q24",
@@ -387,13 +393,15 @@
       "difficulty": "medium",
       "expected_doc_ids": [
         "1TR0SQdI_1UUagPUD8MiWGvvqvaFWD4HHIiZMVeAqhHE",
-        "1wVxtMwE-OIrn_Rm6tj0ByW2z91BHjL65BDC1XCljtNY"
+        "1wVxtMwE-OIrn_Rm6tj0ByW2z91BHjL65BDC1XCljtNY",
+        "1mTLFWMhkX3WAPsBrn1KICu5yJtquCA4H-hAJNbtcu5M",
+        "18MumwC8huImSD1qlqf-FqqH7hSDov34RlCeWH0Sk5o0"
       ],
       "expected_answer_contains": [
         "72",
         "73"
       ],
-      "notes": "Enterprise is 72.7% of total MRR in Dec 2025"
+      "notes": "Enterprise is 72.7% of total MRR in Dec 2025 — also in Board Deck and Dec 6 Sync"
     },
     {
       "id": "q25",
@@ -415,13 +423,14 @@
       "category": "tabular_statistical",
       "difficulty": "medium",
       "expected_doc_ids": [
-        "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg"
+        "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg",
+        "1mTLFWMhkX3WAPsBrn1KICu5yJtquCA4H-hAJNbtcu5M"
       ],
       "expected_answer_contains": [
         "3,710",
         "3710"
       ],
-      "notes": "Q4 2025 refunds = $3,710.32"
+      "notes": "Q4 2025 refunds = $3,710.32 — also in Board Deck"
     },
     {
       "id": "q27",
@@ -506,14 +515,15 @@
       "expected_doc_ids": [
         "1D25sBy7wtQMpiuqVre4N_Cdlj5fk1uX1P5ABaYRm3KU",
         "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA",
-        "1NI6hjMvgfeYpJWxRlIh3cPbIgOlZaZazN3lzINbtQeI"
+        "1NI6hjMvgfeYpJWxRlIh3cPbIgOlZaZazN3lzINbtQeI",
+        "1zpU6wjy_0aIU0pq9VsnShWU9RmAs25lEmnSLU4AkqeU"
       ],
       "expected_answer_contains": [
         "AI Copilot",
         "error rate",
         "features"
       ],
-      "notes": "Requires connecting: beta error rates + feature churn reason + Nov sync discussion"
+      "notes": "Requires connecting: beta error rates + feature churn reason + Nov sync discussion. Health Score has AI adoption vs churn analysis."
     },
     {
       "id": "q33",

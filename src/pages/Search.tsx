@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import FeedbackModal from "@/components/search/FeedbackModal";
 import DocumentDetailPanel from "@/components/search/DocumentDetailPanel";
+import TabularSnippet from "@/components/search/TabularSnippet";
 import { PMButton } from "@/components/ui/pm-button";
 import { PMBadge } from "@/components/ui/pm-badge";
 import { StaggerContainer, StaggerItem } from "@/components/ui/stagger-children";
@@ -17,6 +18,7 @@ import { getUserDisplayName } from "@/lib/utils";
 interface DocumentResult {
   id: string;
   type: "doc" | "slides" | "sheet";
+  contentType: "tabular" | "prose";
   title: string;
   matchScore: number;
   lastEdited?: string;
@@ -77,6 +79,7 @@ const Search = () => {
           const mapped: DocumentResult[] = data.sources.map((source: any, index: number) => ({
             id: source.document_id || String(index),
             type: mapDocumentType(source.document_type),
+            contentType: (source.content_type === "tabular" || mapDocumentType(source.document_type) === "sheet") ? "tabular" : "prose",
             title: source.document_title || "Untitled Document",
             matchScore: Math.round((source.similarity || 0) * 100),
             owner: source.document_owner || "",
@@ -248,9 +251,13 @@ const Search = () => {
                           {doc.owner && `Owner: ${doc.owner}`}
                         </p>
                       )}
-                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                        {doc.snippet}
-                      </p>
+                      {doc.contentType === "tabular" ? (
+                        <TabularSnippet csv={doc.snippet} className="mt-2" />
+                      ) : (
+                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                          {doc.snippet}
+                        </p>
+                      )}
                       {docSummaries[doc.id] && (
                         <div className="mt-2 p-3 glass rounded-md text-sm text-foreground border-l-2 border-l-purple">
                           <div className="flex items-center gap-1.5 mb-1 text-xs text-purple font-medium">

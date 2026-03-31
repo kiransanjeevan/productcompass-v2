@@ -21,6 +21,7 @@
  *   EVAL_RUN_NAME          - Name prefix for this run (default: "baseline")
  *   EVAL_K                 - K value for Recall@K and Precision@K (default: 5)
  *   EVAL_SKIP_LLM_JUDGE    - Set to "true" to skip LLM-as-judge (saves API cost)
+ *   EVAL_MATCH_THRESHOLD   - Cosine similarity threshold (default: 0.5)
  *   EVAL_CONCURRENCY       - Max concurrent queries (default: 3)
  */
 
@@ -98,6 +99,8 @@ interface EvalResults {
     match_count: number;
     max_tokens: number;
     k: number;
+    prompt_version: number | string;
+    qe_version: number | string;
   };
   aggregate: {
     total_queries: number;
@@ -133,22 +136,33 @@ const EVAL_USER_EMAIL = Deno.env.get("EVAL_USER_EMAIL");
 const EVAL_USER_PASSWORD = Deno.env.get("EVAL_USER_PASSWORD");
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
+const MATCH_THRESHOLD = parseFloat(Deno.env.get("EVAL_MATCH_THRESHOLD") || "0.5");
 const DATASET_PATH = Deno.env.get("EVAL_DATASET_PATH") || "evals/golden-dataset.json";
 const RESULTS_DIR = Deno.env.get("EVAL_RESULTS_DIR") || "evals/results";
-const RUN_NAME = Deno.env.get("EVAL_RUN_NAME") || "baseline";
+const RUN_NAME = Deno.env.get("EVAL_RUN_NAME") || `threshold-${MATCH_THRESHOLD}`;
 const K = parseInt(Deno.env.get("EVAL_K") || "5", 10);
 const SKIP_LLM_JUDGE = Deno.env.get("EVAL_SKIP_LLM_JUDGE") === "true";
 const CONCURRENCY = parseInt(Deno.env.get("EVAL_CONCURRENCY") || "3", 10);
+
+// Prompt experiment versions (optional — omit to use active/default prompts)
+const PROMPT_VERSION = Deno.env.get("EVAL_PROMPT_VERSION")
+  ? parseInt(Deno.env.get("EVAL_PROMPT_VERSION")!, 10)
+  : undefined;
+const QE_VERSION = Deno.env.get("EVAL_QE_VERSION")
+  ? parseInt(Deno.env.get("EVAL_QE_VERSION")!, 10)
+  : undefined;
 
 // Current pipeline config (for recording in results)
 const PIPELINE_CONFIG = {
   embedding_model: "text-embedding-3-small",
   synthesis_model: "claude-haiku-4-5-20251001",
   chunk_size: 800,
-  match_threshold: 0.5,
+  match_threshold: MATCH_THRESHOLD,
   match_count: 10,
   max_tokens: 500,
   k: K,
+  prompt_version: PROMPT_VERSION ?? "active",
+  qe_version: QE_VERSION ?? "active",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -289,7 +303,8 @@ Respond with ONLY a JSON object (no markdown, no code fences):
     }
 
     const data = await res.json();
-    const text = data.content?.[0]?.text || "";
+    const raw = data.content?.[0]?.text || "";
+    const text = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
     const parsed = JSON.parse(text);
     return {
       score: Math.max(1, Math.min(5, parsed.score)),
@@ -494,7 +509,12 @@ async function main() {
           "Content-Type": "application/json",
           apikey: SUPABASE_ANON_KEY!,
         },
-        body: JSON.stringify({ query: gq.query, threshold: PIPELINE_CONFIG.match_threshold }),
+        body: JSON.stringify({
+          query: gq.query,
+          threshold: PIPELINE_CONFIG.match_threshold,
+          ...(PROMPT_VERSION !== undefined && { prompt_version: PROMPT_VERSION }),
+          ...(QE_VERSION !== undefined && { qe_version: QE_VERSION }),
+        }),
       });
 
       if (!res.ok) {

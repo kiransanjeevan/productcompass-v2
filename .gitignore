@@ -30,3 +30,4 @@ evals/results/*.json
 
 # Eval data (CSV datasets, not code)
 evals/data/
+.env.evals
