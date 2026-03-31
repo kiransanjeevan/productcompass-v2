@@ -285,7 +285,7 @@ Deno.serve(async (req) => {
       console.error("Claude API error:", claudeRes.status, await claudeRes.text());
     }
 
-    // 7. Build sources
+    // 7. Build sources (full chunk_text for evals/judge, truncated snippet for frontend)
     const sources = uniqueMatches.map((m: any) => {
       const isSheet = (m.document_type || "").toLowerCase().includes("sheet") ||
                       (m.document_type || "").toLowerCase().includes("spreadsheet");
@@ -298,7 +298,8 @@ Deno.serve(async (req) => {
         document_url: m.document_url,
         document_owner: m.document_owner,
         similarity: m.similarity,
-        chunk_text: m.chunk_text.slice(0, snippetLength),
+        chunk_text: m.chunk_text,
+        snippet: m.chunk_text.slice(0, snippetLength),
         content_type: contentType,
       };
     });

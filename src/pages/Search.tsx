@@ -83,7 +83,7 @@ const Search = () => {
             title: source.document_title || "Untitled Document",
             matchScore: Math.round((source.similarity || 0) * 100),
             owner: source.document_owner || "",
-            snippet: source.chunk_text || "",
+            snippet: source.snippet || source.chunk_text || "",
             excerpts: source.chunk_text ? [source.chunk_text] : [],
             url: source.document_url,
           }));

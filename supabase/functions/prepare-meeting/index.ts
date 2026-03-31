@@ -122,7 +122,7 @@ Description: ${meeting.description || "No description"}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1000,
         temperature: 0,
         system: "You are a meeting preparation assistant for Product Managers. Generate a concise meeting brief based on the meeting details and relevant documents provided. Include: 1) Meeting overview (title, time, attendees), 2) Likely discussion topics based on the meeting title and recent documents, 3) Key context from relevant documents that the PM should review before the meeting. If no relevant documents are found, suggest what topics might come up based on the meeting title and attendees. Be concise and actionable.",
