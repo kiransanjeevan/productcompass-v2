@@ -76,13 +76,12 @@
       "difficulty": "easy",
       "expected_doc_ids": [
         "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg",
-        "1MKRxpnRk2YVWquHzIxLGEZ_bqsqhzwCQF0mQSBEJiBM",
-        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA"
+        "1MKRxpnRk2YVWquHzIxLGEZ_bqsqhzwCQF0mQSBEJiBM"
       ],
       "expected_answer_contains": [
         "churn"
       ],
-      "notes": "Should find both churn analysis sheets + churn initiative (contains analysis data)"
+      "notes": "Should find both churn analysis sheets"
     },
     {
       "id": "q03",
@@ -318,14 +317,13 @@
       "expected_doc_ids": [
         "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg",
         "1MKRxpnRk2YVWquHzIxLGEZ_bqsqhzwCQF0mQSBEJiBM",
-        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA",
-        "17i7gismezP8b5O_SI_vSjA3U1rz4B69pSt3vTLiKBeo"
+        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA"
       ],
       "expected_answer_contains": [
         "features",
         "budget"
       ],
-      "notes": "Churn is by reason code not tier. Top reasons: features (114), support (104), budget (104). NRR Analysis has tier-level churn data."
+      "notes": "Churn is by reason code not tier. Top reasons: features (114), support (104), budget (104)"
     },
     {
       "id": "q20",
@@ -378,13 +376,12 @@
       "difficulty": "easy",
       "expected_doc_ids": [
         "1UX81RvQydpIZTQlAxSsvGRRZ23550j01xYbMOFWr3tg",
-        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA",
-        "1NI6hjMvgfeYpJWxRlIh3cPbIgOlZaZazN3lzINbtQeI"
+        "1KxKeS04AXhg3CbxwKSsgekgiUlh8qZ59EJj2RYkrtcA"
       ],
       "expected_answer_contains": [
         "251"
       ],
-      "notes": "251 churn events in Q4 2025 — also stated in Churn Initiative and Nov 15 Sync"
+      "notes": "251 churn events in Q4 2025 — also stated in Churn Initiative"
     },
     {
       "id": "q24",

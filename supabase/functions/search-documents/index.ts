@@ -213,6 +213,7 @@ Deno.serve(async (req) => {
           match_count: 10,
           match_threshold: matchThreshold,
           user_uuid: user.id,
+          theme_filter: null,
         })
       )
     );

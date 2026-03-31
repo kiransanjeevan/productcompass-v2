@@ -21,6 +21,7 @@
  *   EVAL_RUN_NAME          - Name prefix for this run (default: "baseline")
  *   EVAL_K                 - K value for Recall@K and Precision@K (default: 5)
  *   EVAL_SKIP_LLM_JUDGE    - Set to "true" to skip LLM-as-judge (saves API cost)
+ *   EVAL_SKIP_FAITHFULNESS  - Set to "true" to skip faithfulness scoring (saves API cost)
  *   EVAL_MATCH_THRESHOLD   - Cosine similarity threshold (default: 0.5)
  *   EVAL_CONCURRENCY       - Max concurrent queries (default: 3)
  */
@@ -86,6 +87,10 @@ interface QueryResult {
   // LLM-as-judge (optional)
   llm_judge_score: number | null;
   llm_judge_explanation: string | null;
+  // Faithfulness (optional)
+  faithfulness_score: number | null;
+  faithfulness_explanation: string | null;
+  faithfulness_claims: { claim: string; verdict: string; evidence: string }[] | null;
 }
 
 interface EvalResults {
@@ -110,6 +115,7 @@ interface EvalResults {
     factual_containment: number;
     citation_accuracy: number;
     llm_judge_avg: number | null;
+    faithfulness_avg: number | null;
     avg_latency_ms: number;
     by_category: Record<string, CategoryMetrics>;
     by_difficulty: Record<string, CategoryMetrics>;
@@ -125,6 +131,7 @@ interface CategoryMetrics {
   factual_containment: number;
   citation_accuracy: number;
   llm_judge_avg: number | null;
+  faithfulness_avg: number | null;
 }
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -142,6 +149,8 @@ const RESULTS_DIR = Deno.env.get("EVAL_RESULTS_DIR") || "evals/results";
 const RUN_NAME = Deno.env.get("EVAL_RUN_NAME") || `threshold-${MATCH_THRESHOLD}`;
 const K = parseInt(Deno.env.get("EVAL_K") || "5", 10);
 const SKIP_LLM_JUDGE = Deno.env.get("EVAL_SKIP_LLM_JUDGE") === "true";
+const SKIP_FAITHFULNESS = Deno.env.get("EVAL_SKIP_FAITHFULNESS") === "true";
+const FAITHFULNESS_MODEL = Deno.env.get("EVAL_FAITHFULNESS_MODEL") || "claude-haiku-4-5-20251001";
 const CONCURRENCY = parseInt(Deno.env.get("EVAL_CONCURRENCY") || "3", 10);
 
 // Prompt experiment versions (optional — omit to use active/default prompts)
@@ -316,6 +325,88 @@ Respond with ONLY a JSON object (no markdown, no code fences):
   }
 }
 
+// ─── Faithfulness ────────────────────────────────────────────────────────────
+
+async function faithfulnessJudge(
+  query: string,
+  answer: string,
+  chunks: string[],
+): Promise<{ score: number; explanation: string; claims: { claim: string; verdict: string; evidence: string }[] }> {
+  if (!ANTHROPIC_API_KEY) {
+    return { score: -1, explanation: "ANTHROPIC_API_KEY not set", claims: [] };
+  }
+
+  if (!answer || answer.includes("couldn't find")) {
+    // "No results" answers are trivially faithful
+    return { score: 5, explanation: "No-result answer — nothing to hallucinate", claims: [] };
+  }
+
+  const chunksText = chunks.map((c, i) => `[Chunk ${i + 1}]\n${c}`).join("\n\n");
+
+  const prompt = `You are a rigorous evaluator checking whether a RAG system's answer is faithful to its source documents.
+
+Your task: go through the answer claim by claim and check if each factual claim (numbers, dates, quotes, statistics, names, percentages) can be found in the source chunks.
+
+Step-by-step process:
+1. List the key factual claims in the answer
+2. For each claim, state whether it is SUPPORTED (found verbatim or clearly stated in a chunk), UNSUPPORTED (not in any chunk), or PARTIAL (related info exists but specific detail is added)
+3. Give a final score
+
+Scoring:
+1 = Mostly hallucinated — majority of claims not in chunks
+2 = Significant fabrication — some claims supported, but key facts invented
+3 = Partially faithful — main points grounded, but includes unsupported details or numbers
+4 = Mostly faithful — nearly all claims in chunks, only minor embellishments
+5 = Fully faithful — every claim traceable to chunks
+
+Query: "${query}"
+
+Source chunks:
+${chunksText}
+
+Answer to evaluate:
+"${answer}"
+
+Respond with ONLY a JSON object (no markdown, no code fences):
+{"claims": [{"claim": "<factual claim>", "verdict": "SUPPORTED|UNSUPPORTED|PARTIAL", "evidence": "<which chunk or why not found>"}], "score": <1-5>, "explanation": "<summary judgement>"}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: FAITHFULNESS_MODEL,
+        max_tokens: 1000,
+        temperature: 0,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      logError(`Faithfulness judge API error: ${res.status} ${errText}`);
+      return { score: -1, explanation: `API error: ${res.status}`, claims: [] };
+    }
+
+    const data = await res.json();
+    const raw = data.content?.[0]?.text || "";
+    const text = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
+    const parsed = JSON.parse(text);
+    return {
+      score: Math.max(1, Math.min(5, parsed.score)),
+      explanation: parsed.explanation || "",
+      claims: Array.isArray(parsed.claims) ? parsed.claims : [],
+    };
+  } catch (err) {
+    logError(`Faithfulness judge failed: ${err}`);
+    return { score: -1, explanation: `Parse/network error: ${err}`, claims: [] };
+  }
+}
+
 // ─── Aggregate Metrics ───────────────────────────────────────────────────────
 
 function aggregateResults(results: QueryResult[]): EvalResults["aggregate"] {
@@ -329,6 +420,7 @@ function aggregateResults(results: QueryResult[]): EvalResults["aggregate"] {
       factual_containment: 0,
       citation_accuracy: 0,
       llm_judge_avg: null,
+      faithfulness_avg: null,
       avg_latency_ms: 0,
       by_category: {},
       by_difficulty: {},
@@ -339,6 +431,10 @@ function aggregateResults(results: QueryResult[]): EvalResults["aggregate"] {
 
   const llmScores = results
     .map((r) => r.llm_judge_score)
+    .filter((s): s is number => s !== null && s > 0);
+
+  const faithScores = results
+    .map((r) => r.faithfulness_score)
     .filter((s): s is number => s !== null && s > 0);
 
   // Group by category and difficulty
@@ -353,6 +449,9 @@ function aggregateResults(results: QueryResult[]): EvalResults["aggregate"] {
     const groupLlm = group
       .map((r) => r.llm_judge_score)
       .filter((s): s is number => s !== null && s > 0);
+    const groupFaith = group
+      .map((r) => r.faithfulness_score)
+      .filter((s): s is number => s !== null && s > 0);
     return {
       count: group.length,
       recall_at_k: avg(group.map((r) => r.recall_at_k)),
@@ -361,6 +460,7 @@ function aggregateResults(results: QueryResult[]): EvalResults["aggregate"] {
       factual_containment: avg(group.map((r) => r.factual_containment)),
       citation_accuracy: avg(group.map((r) => r.citation_accuracy)),
       llm_judge_avg: groupLlm.length > 0 ? avg(groupLlm) : null,
+      faithfulness_avg: groupFaith.length > 0 ? avg(groupFaith) : null,
     };
   }
 
@@ -381,6 +481,7 @@ function aggregateResults(results: QueryResult[]): EvalResults["aggregate"] {
     factual_containment: avg(results.map((r) => r.factual_containment)),
     citation_accuracy: avg(results.map((r) => r.citation_accuracy)),
     llm_judge_avg: llmScores.length > 0 ? avg(llmScores) : null,
+    faithfulness_avg: faithScores.length > 0 ? avg(faithScores) : null,
     avg_latency_ms: avg(results.map((r) => r.latency_ms)),
     by_category: categoryMetrics,
     by_difficulty: difficultyMetrics,
@@ -405,9 +506,9 @@ async function main() {
     Deno.exit(1);
   }
 
-  if (!ANTHROPIC_API_KEY && !SKIP_LLM_JUDGE) {
-    log("Warning: ANTHROPIC_API_KEY not set. LLM-as-judge will be skipped.");
-    log("Set EVAL_SKIP_LLM_JUDGE=true to suppress this warning.");
+  if (!ANTHROPIC_API_KEY && (!SKIP_LLM_JUDGE || !SKIP_FAITHFULNESS)) {
+    log("Warning: ANTHROPIC_API_KEY not set. LLM-as-judge and faithfulness will be skipped.");
+    log("Set EVAL_SKIP_LLM_JUDGE=true and EVAL_SKIP_FAITHFULNESS=true to suppress this warning.");
   }
 
   // 1. Load golden dataset
@@ -552,12 +653,27 @@ async function main() {
       }
     }
 
+    // Faithfulness (optional)
+    let faithScore: number | null = null;
+    let faithExplanation: string | null = null;
+    let faithClaims: { claim: string; verdict: string; evidence: string }[] | null = null;
+    if (!SKIP_FAITHFULNESS && ANTHROPIC_API_KEY) {
+      const chunks = searchResponse.sources.map((s) => s.chunk_text);
+      const faithResult = await faithfulnessJudge(gq.query, searchResponse.answer, chunks);
+      if (faithResult.score > 0) {
+        faithScore = faithResult.score;
+        faithExplanation = faithResult.explanation;
+        faithClaims = faithResult.claims.length > 0 ? faithResult.claims : null;
+      }
+    }
+
     completed++;
+    const faithLabel = faithScore !== null ? ` F=${(faithScore / 5).toFixed(2)}` : "";
     const status = recallAtK >= 0.8 ? "✓" : recallAtK > 0 ? "~" : "✗";
     log(
       `  ${status} [${completed}/${dataset.queries.length}] ${gq.id} (${gq.category}) ` +
         `R@${K}=${recallAtK.toFixed(2)} P@${K}=${precisionAtK.toFixed(2)} ` +
-        `FC=${factual.score.toFixed(2)} ${latencyMs}ms`,
+        `FC=${factual.score.toFixed(2)}${faithLabel} ${latencyMs}ms`,
     );
 
     results.push({
@@ -579,6 +695,9 @@ async function main() {
       citation_accuracy: citationAcc,
       llm_judge_score: llmScore,
       llm_judge_explanation: llmExplanation,
+      faithfulness_score: faithScore,
+      faithfulness_explanation: faithExplanation,
+      faithfulness_claims: faithClaims,
     });
   });
 
@@ -626,6 +745,9 @@ async function main() {
   log(`    Citation accuracy:${(aggregate.citation_accuracy * 100).toFixed(1)}%`);
   if (aggregate.llm_judge_avg !== null) {
     log(`    LLM judge avg:    ${aggregate.llm_judge_avg.toFixed(2)}/5`);
+  }
+  if (aggregate.faithfulness_avg !== null) {
+    log(`    Faithfulness avg: ${aggregate.faithfulness_avg.toFixed(2)}/5`);
   }
   log("");
   log("  BY CATEGORY");

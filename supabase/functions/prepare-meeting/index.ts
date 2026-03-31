@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
         match_count: 10,
         match_threshold: 0.2,
         user_uuid: user.id,
+        theme_filter: null,
       });
 
       matches = matchData || [];
