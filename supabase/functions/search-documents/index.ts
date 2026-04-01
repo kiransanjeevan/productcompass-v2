@@ -218,8 +218,8 @@ Deno.serve(async (req) => {
       )
     );
 
-    // 4. Dedup by document_id (keep highest similarity)
-    const seenDocs = new Map();
+    // 4. Collect all chunks, dedup by chunk ID (same chunk from multiple query variants)
+    const seenChunks = new Map();
     for (const { data: matches, error: matchError } of allMatchResults) {
       if (matchError) {
         console.error("Match error:", matchError);
@@ -227,16 +227,29 @@ Deno.serve(async (req) => {
       }
       if (!matches) continue;
       for (const m of matches) {
-        if (!seenDocs.has(m.document_id) || m.similarity > seenDocs.get(m.document_id).similarity) {
-          seenDocs.set(m.document_id, m);
+        if (!seenChunks.has(m.id) || m.similarity > seenChunks.get(m.id).similarity) {
+          seenChunks.set(m.id, m);
         }
       }
     }
-    const uniqueMatches = Array.from(seenDocs.values())
-      .sort((a: any, b: any) => b.similarity - a.similarity)
-      .slice(0, 5);
 
-    if (uniqueMatches.length === 0) {
+    // Top 10 chunks by similarity → sent to LLM
+    const allChunks = Array.from(seenChunks.values())
+      .sort((a: any, b: any) => b.similarity - a.similarity)
+      .slice(0, 10);
+
+    // Top 5 unique documents → sent to frontend
+    const seenDocIds = new Set();
+    const uniqueMatches: any[] = [];
+    for (const chunk of allChunks) {
+      if (!seenDocIds.has(chunk.document_id)) {
+        seenDocIds.add(chunk.document_id);
+        uniqueMatches.push(chunk);
+      }
+      if (uniqueMatches.length >= 5) break;
+    }
+
+    if (allChunks.length === 0) {
       return new Response(JSON.stringify({
         answer: "I couldn't find any relevant documents matching your query.",
         sources: [],
@@ -246,8 +259,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 5. Build context for Claude
-    const chunksContext = uniqueMatches
+    // 5. Build context for Claude (all chunks, not just unique docs)
+    const chunksContext = allChunks
       .map((m: any) => `[Document: ${m.document_title}]\n${m.chunk_text}`)
       .join("\n\n---\n\n");
 
@@ -285,8 +298,16 @@ Deno.serve(async (req) => {
       console.error("Claude API error:", claudeRes.status, await claudeRes.text());
     }
 
-    // 7. Build sources (full chunk_text for evals/judge, truncated snippet for frontend)
+    // 7. Build sources (all chunks per doc for evals/judge, snippet for frontend)
+    const docChunksMap = new Map();
+    for (const c of allChunks) {
+      if (!docChunksMap.has(c.document_id)) docChunksMap.set(c.document_id, []);
+      docChunksMap.get(c.document_id).push(c);
+    }
+
     const sources = uniqueMatches.map((m: any) => {
+      const chunks = (docChunksMap.get(m.document_id) || [m])
+        .sort((a: any, b: any) => a.chunk_index - b.chunk_index);
       const isSheet = (m.document_type || "").toLowerCase().includes("sheet") ||
                       (m.document_type || "").toLowerCase().includes("spreadsheet");
       const contentType = m.metadata?.content_type ?? (isSheet ? "tabular" : "prose");
@@ -298,7 +319,7 @@ Deno.serve(async (req) => {
         document_url: m.document_url,
         document_owner: m.document_owner,
         similarity: m.similarity,
-        chunk_text: m.chunk_text,
+        chunk_text: chunks.map((c: any) => c.chunk_text).join("\n\n"),
         snippet: m.chunk_text.slice(0, snippetLength),
         content_type: contentType,
       };
