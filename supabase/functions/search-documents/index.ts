@@ -233,10 +233,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Top 10 chunks by similarity → sent to LLM
-    const allChunks = Array.from(seenChunks.values())
-      .sort((a: any, b: any) => b.similarity - a.similarity)
-      .slice(0, 10);
+    // Top chunks → sent to LLM (capped by count and total context size)
+    const MAX_LLM_CHUNKS = 7;
+    const MAX_CONTEXT_CHARS = 6000;
+    const sortedChunks = Array.from(seenChunks.values())
+      .sort((a: any, b: any) => b.similarity - a.similarity);
+
+    // Apply character cap on selected chunks
+    const allChunks: any[] = [];
+    let totalChars = 0;
+    for (const chunk of sortedChunks) {
+      if (allChunks.length >= MAX_LLM_CHUNKS) break;
+      const chunkLen = (chunk.chunk_text || "").length;
+      if (totalChars + chunkLen > MAX_CONTEXT_CHARS && allChunks.length > 0) break;
+      allChunks.push(chunk);
+      totalChars += chunkLen;
+    }
 
     // Top 5 unique documents → sent to frontend
     const seenDocIds = new Set();
@@ -280,22 +292,37 @@ Deno.serve(async (req) => {
       synthesisBody.system = synthesisPrompt.system_prompt;
     }
 
-    const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(synthesisBody),
-    });
+    const synthesisController = new AbortController();
+    const synthesisTimeout = setTimeout(() => synthesisController.abort(), 25000);
 
     let answer = "I couldn't generate an answer at this time.";
-    if (claudeRes.ok) {
-      const claudeData = await claudeRes.json();
-      answer = claudeData.content?.[0]?.text || answer;
-    } else {
-      console.error("Claude API error:", claudeRes.status, await claudeRes.text());
+    try {
+      const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(synthesisBody),
+        signal: synthesisController.signal,
+      });
+
+      if (claudeRes.ok) {
+        const claudeData = await claudeRes.json();
+        answer = claudeData.content?.[0]?.text || answer;
+      } else {
+        console.error("Claude API error:", claudeRes.status, await claudeRes.text());
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        console.error("Claude synthesis timed out after 25s");
+        answer = "The search took too long to process. Please try a more specific query.";
+      } else {
+        throw err;
+      }
+    } finally {
+      clearTimeout(synthesisTimeout);
     }
 
     // 7. Build sources (all chunks per doc for evals/judge, snippet for frontend)
