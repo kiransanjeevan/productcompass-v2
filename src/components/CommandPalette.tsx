@@ -47,10 +47,10 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden p-0 max-w-[640px] glass-strong rounded-lg border-border/50 shadow-modal top-[20%] translate-y-0">
+      <DialogContent className="overflow-hidden p-0 max-w-[640px] glass-strong rounded-lg border-border/50 shadow-modal top-[20%] translate-y-0 [&>button:last-child]:hidden">
         <Command className="bg-transparent" shouldFilter={false}>
           <div
-            className="flex items-center border-b border-border px-4"
+            className="relative border-b border-border"
             onKeyDown={(e) => {
               if (e.key === "Enter" && query.trim()) {
                 e.preventDefault();
@@ -62,9 +62,9 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
               placeholder="Search documents, navigate, or take action..."
               value={query}
               onValueChange={setQuery}
-              className="h-14 text-base border-0 focus:ring-0 bg-transparent placeholder:text-muted-foreground/60"
+              className="h-14 w-full text-base border-0 focus:ring-0 bg-transparent placeholder:text-muted-foreground/60 pr-14"
             />
-            <kbd className="ml-2 shrink-0 text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            <kbd className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded pointer-events-none">
               ESC
             </kbd>
           </div>

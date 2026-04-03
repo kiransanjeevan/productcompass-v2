@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
 import FeedbackModal from "@/components/search/FeedbackModal";
 import DocumentDetailPanel from "@/components/search/DocumentDetailPanel";
 import TabularSnippet from "@/components/search/TabularSnippet";
@@ -47,7 +48,7 @@ const Search = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [showSummary, setShowSummary] = useState(false);
+  const [showSummary, setShowSummary] = useState(true);
   const [summarizingDocId, setSummarizingDocId] = useState<string | null>(null);
   const [docSummaries, setDocSummaries] = useState<Record<string, string>>({});
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -62,7 +63,7 @@ const Search = () => {
       setError(null);
       setResults([]);
       setAiAnswer("");
-      setShowSummary(false);
+      setShowSummary(true);
 
       try {
         const { data, error: fnError } = await supabase.functions.invoke("search-documents", {
@@ -159,10 +160,10 @@ const Search = () => {
             <p className="text-sm text-muted-foreground">
               Found {results.length} document{results.length !== 1 ? "s" : ""} · Ranked by relevance
             </p>
-            {aiAnswer && !showSummary && (
-              <PMButton variant="glass" size="sm" onClick={() => setShowSummary(true)} className="gap-1.5">
+            {aiAnswer && (
+              <PMButton variant="glass" size="sm" onClick={() => setShowSummary(!showSummary)} className="gap-1.5">
                 <Sparkles className="h-3 w-3" />
-                Show AI Summary
+                {showSummary ? "Hide AI Summary" : "Show AI Summary"}
               </PMButton>
             )}
           </div>
@@ -204,25 +205,26 @@ const Search = () => {
               exit={{ opacity: 0, height: 0 }}
               className="mb-6"
             >
-              <div className="glass rounded-lg p-5 border-l-2 border-l-purple">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-purple" />
-                    <span className="font-medium text-foreground">AI Summary</span>
+              <div
+                className="rounded-xl p-[1px]"
+                style={{
+                  background: "linear-gradient(135deg, hsl(217 91% 60% / 0.4), hsl(258 90% 66% / 0.4))",
+                }}
+              >
+                <div className="rounded-xl p-5 bg-background/95 backdrop-blur-xl">
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-primary/20 to-purple/20">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                    </div>
+                    <span className="font-semibold text-foreground">AI Summary</span>
+                    <PMBadge variant="info" className="text-[10px] ml-1">
+                      {results.length} source{results.length !== 1 ? "s" : ""}
+                    </PMBadge>
                   </div>
-                  <button
-                    onClick={() => setShowSummary(false)}
-                    className="p-1 hover:bg-white/10 rounded transition-colors"
-                  >
-                    <X className="h-4 w-4 text-muted-foreground" />
-                  </button>
+                  <div className="text-sm text-foreground leading-relaxed prose prose-invert prose-sm max-w-none prose-headings:text-foreground prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:text-foreground prose-a:text-primary">
+                    <ReactMarkdown>{aiAnswer}</ReactMarkdown>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Based on {results.length} document{results.length !== 1 ? "s" : ""} about "{query}":
-                </p>
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                  {aiAnswer}
-                </p>
               </div>
             </motion.div>
           )}
