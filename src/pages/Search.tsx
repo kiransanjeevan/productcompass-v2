@@ -8,7 +8,7 @@ import { PMButton } from "@/components/ui/pm-button";
 import { PMBadge } from "@/components/ui/pm-badge";
 import { StaggerContainer, StaggerItem } from "@/components/ui/stagger-children";
 import { SkeletonShimmer } from "@/components/ui/skeleton-shimmer";
-import { ArrowLeft, FileText, Presentation, Sheet, ExternalLink, Sparkles, X, Loader2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, FileText, Presentation, Sheet, ExternalLink, Sparkles, X, Loader2, AlertTriangle, MessageSquare, Zap, Database, Filter, FileSearch, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,6 +36,70 @@ function mapDocumentType(docType: string): "doc" | "slides" | "sheet" {
   if (lower.includes("sheet") || lower.includes("spreadsheet")) return "sheet";
   return "doc";
 }
+
+const PIPELINE_STEPS = [
+  { icon: MessageSquare, label: "Expanding query", detail: "Generating 3 search variants", delay: 0 },
+  { icon: Zap, label: "Embedding queries", detail: "Converting to vectors in parallel", delay: 1200 },
+  { icon: Database, label: "Searching documents", detail: "Scanning all indexed chunks", delay: 2400 },
+  { icon: Filter, label: "Selecting best matches", detail: "Ranking by relevance", delay: 3600 },
+  { icon: Sparkles, label: "Synthesizing answer", detail: "Generating cited response", delay: 4800 },
+];
+
+const PipelineLoader = () => {
+  const [activeStep, setActiveStep] = useState(0);
+
+  useEffect(() => {
+    const timers = PIPELINE_STEPS.map((step, index) =>
+      setTimeout(() => setActiveStep(index), step.delay)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  return (
+    <div className="py-8">
+      <div className="glass rounded-xl p-6 max-w-lg mx-auto">
+        <div className="space-y-4">
+          <AnimatePresence mode="popLayout">
+            {PIPELINE_STEPS.filter((_, index) => index <= activeStep).map((step, index) => {
+              const isActive = index === activeStep;
+              const isDone = index < activeStep;
+
+              return (
+                <motion.div
+                  key={step.label}
+                  initial={{ opacity: 0, height: 0, y: -5 }}
+                  animate={{ opacity: 1, height: "auto", y: 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="flex items-center gap-3"
+                >
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0 transition-all duration-300 ${
+                    isActive
+                      ? "bg-primary/20 text-primary"
+                      : "bg-success/20 text-success"
+                  }`}>
+                    {isDone ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    )}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-medium transition-colors duration-300 ${
+                      isActive ? "text-foreground" : "text-success"
+                    }`}>
+                      {step.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{step.detail}</p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Search = () => {
   const navigate = useNavigate();
@@ -170,14 +234,8 @@ const Search = () => {
         )}
       </div>
 
-      {/* Loading State */}
-      {loading && (
-        <div className="space-y-4 py-8">
-          <SkeletonShimmer className="h-24 w-full rounded-lg" />
-          <SkeletonShimmer className="h-20 w-full rounded-lg" />
-          <SkeletonShimmer className="h-20 w-full rounded-lg" />
-        </div>
-      )}
+      {/* Loading State — Pipeline Steps */}
+      {loading && <PipelineLoader />}
 
       {/* Error State */}
       {error && !loading && (
