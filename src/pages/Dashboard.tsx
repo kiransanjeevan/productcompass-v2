@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { PMCard, PMCardHeader, PMCardTitle, PMCardContent, PMCardFooter } from "@/components/ui/pm-card";
 import { PMButton } from "@/components/ui/pm-button";
+import { PMBadge } from "@/components/ui/pm-badge";
 import { StaggerContainer, StaggerItem } from "@/components/ui/stagger-children";
 import { SkeletonShimmer } from "@/components/ui/skeleton-shimmer";
 import { Calendar, Clock, ChevronRight, Loader2, CheckCircle2, AlertTriangle, Search, CalendarDays } from "lucide-react";
@@ -258,6 +259,7 @@ const Dashboard = () => {
               <PMCardHeader>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <PMCardTitle>Upcoming Meetings</PMCardTitle>
+                <PMBadge variant="info" className="text-[10px] ml-1">Beta</PMBadge>
               </PMCardHeader>
               <PMCardContent className="flex-1">
                 {meetingsLoading ? (
