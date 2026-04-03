@@ -61,17 +61,31 @@ const Dashboard = () => {
     } catch {}
   }, []);
 
-  // Check if user has Google API tokens
+  // Check if user has Google API tokens (with retry for post-OAuth race condition)
   useEffect(() => {
     if (!user) return;
-    const checkTokens = async () => {
+    let cancelled = false;
+
+    const checkTokens = async (attempt = 0) => {
       const { count } = await supabase
         .from("oauth_tokens")
         .select("id", { count: "exact", head: true })
         .eq("provider", "google");
-      setHasGoogleTokens((count ?? 0) > 0);
+
+      if (cancelled) return;
+
+      if ((count ?? 0) > 0) {
+        setHasGoogleTokens(true);
+      } else if (attempt < 3) {
+        // Session may not be ready yet after OAuth redirect — retry
+        setTimeout(() => checkTokens(attempt + 1), 1000);
+      } else {
+        setHasGoogleTokens(false);
+      }
     };
+
     checkTokens();
+    return () => { cancelled = true; };
   }, [user]);
 
   // Document indexing
