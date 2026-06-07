@@ -13,7 +13,7 @@ import { ArrowLeft, FileText, Presentation, Sheet, ExternalLink, Sparkles, X, Lo
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client";
 import { getUserDisplayName } from "@/lib/utils";
 
 
@@ -38,60 +38,50 @@ function mapDocumentType(docType: string): "doc" | "slides" | "sheet" {
   return "doc";
 }
 
-const PIPELINE_STEPS = [
-  { icon: MessageSquare, label: "Expanding query", detail: "Generating 3 search variants", delay: 0 },
-  { icon: Zap, label: "Embedding queries", detail: "Converting to vectors in parallel", delay: 1200 },
-  { icon: Database, label: "Searching documents", detail: "Scanning all indexed chunks", delay: 2400 },
-  { icon: Filter, label: "Selecting best matches", detail: "Ranking by relevance", delay: 3600 },
-  { icon: Sparkles, label: "Synthesizing answer", detail: "Generating cited response", delay: 4800 },
-];
+// Step id → human label. Covers both the SQL and vector pipelines; the loader
+// renders whichever steps the backend actually streams.
+const STEP_LABELS: Record<string, string> = {
+  understanding: "Understanding your question",
+  routing: "Choosing the best approach",
+  generating_sql: "Writing the database query",
+  executing: "Running the query on your data",
+  matching_feedback: "Matching customer feedback",
+  synthesizing: "Composing your answer",
+  expanding: "Expanding your query",
+  searching: "Searching your documents",
+  ranking: "Selecting the best matches",
+  composing: "Composing your answer",
+};
 
-const PipelineLoader = () => {
-  const [activeStep, setActiveStep] = useState(0);
-
-  useEffect(() => {
-    const timers = PIPELINE_STEPS.map((step, index) =>
-      setTimeout(() => setActiveStep(index), step.delay)
-    );
-    return () => timers.forEach(clearTimeout);
-  }, []);
-
+// Event-driven loader: renders the real steps streamed from the backend. The
+// last step is "active" (spinner); earlier ones are done (check).
+const PipelineLoader = ({ steps }: { steps: string[] }) => {
+  const shown = steps.length ? steps : ["understanding"];
   return (
     <div className="py-8">
       <div className="glass rounded-xl p-6 max-w-lg mx-auto">
         <div className="space-y-4">
           <AnimatePresence mode="popLayout">
-            {PIPELINE_STEPS.filter((_, index) => index <= activeStep).map((step, index) => {
-              const isActive = index === activeStep;
-              const isDone = index < activeStep;
-
+            {shown.map((stepId, index) => {
+              const isActive = index === shown.length - 1;
               return (
                 <motion.div
-                  key={step.label}
+                  key={stepId}
                   initial={{ opacity: 0, height: 0, y: -5 }}
                   animate={{ opacity: 1, height: "auto", y: 0 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                   className="flex items-center gap-3"
                 >
                   <div className={`flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0 transition-all duration-300 ${
-                    isActive
-                      ? "bg-primary/20 text-primary"
-                      : "bg-success/20 text-success"
+                    isActive ? "bg-primary/20 text-primary" : "bg-success/20 text-success"
                   }`}>
-                    {isDone ? (
-                      <CheckCircle className="h-4 w-4" />
-                    ) : (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    )}
+                    {isActive ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                   </div>
-                  <div>
-                    <p className={`text-sm font-medium transition-colors duration-300 ${
-                      isActive ? "text-foreground" : "text-success"
-                    }`}>
-                      {step.label}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{step.detail}</p>
-                  </div>
+                  <p className={`text-sm font-medium transition-colors duration-300 ${
+                    isActive ? "text-foreground" : "text-success"
+                  }`}>
+                    {STEP_LABELS[stepId] ?? stepId}
+                  </p>
                 </motion.div>
               );
             })}
@@ -102,6 +92,65 @@ const PipelineLoader = () => {
   );
 };
 
+interface StreamPayload { answer?: string; sources?: any[]; query?: string; trace?: SearchTrace; step?: string; text?: string; message?: string; }
+
+/** Calls the search function in streaming (SSE) mode and dispatches events. Throws on any failure so the caller can fall back to the buffered call. */
+async function streamSearch(
+  query: string,
+  h: { onStep: (s: string) => void; onToken: (t: string) => void; onResult: (r: StreamPayload) => void },
+): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("no session token");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/search-documents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ query, stream: true }),
+  });
+  if (!res.ok || !res.body) throw new Error(`stream failed: ${res.status}`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      let event = "message";
+      let dataStr = "";
+      for (const line of part.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+      }
+      if (!dataStr) continue;
+      let payload: StreamPayload;
+      try { payload = JSON.parse(dataStr); } catch { continue; }
+      if (event === "step" && payload.step) h.onStep(payload.step);
+      else if (event === "token") h.onToken(payload.text ?? "");
+      else if (event === "result") h.onResult(payload);
+      else if (event === "error") throw new Error(payload.message ?? "stream error");
+    }
+  }
+}
+
+function mapSources(sources: any[]): DocumentResult[] {
+  return sources.map((source: any, index: number) => ({
+    id: source.document_id || String(index),
+    type: mapDocumentType(source.document_type),
+    contentType: (source.content_type === "tabular" || mapDocumentType(source.document_type) === "sheet") ? "tabular" : "prose",
+    title: source.document_title || "Untitled Document",
+    matchScore: Math.round((source.similarity || 0) * 100),
+    owner: source.document_owner || "",
+    snippet: source.snippet || source.chunk_text || "",
+    excerpts: source.chunk_text ? [source.chunk_text] : [],
+    url: source.document_url,
+  }));
+}
+
 const Search = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -111,6 +160,7 @@ const Search = () => {
   const [results, setResults] = useState<DocumentResult[]>([]);
   const [aiAnswer, setAiAnswer] = useState("");
   const [aiTrace, setAiTrace] = useState<SearchTrace | null>(null);
+  const [streamSteps, setStreamSteps] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,39 +180,41 @@ const Search = () => {
       setResults([]);
       setAiAnswer("");
       setAiTrace(null);
+      setStreamSteps([]);
       setShowSummary(true);
 
       try {
-        const { data, error: fnError } = await supabase.functions.invoke("search-documents", {
-          body: { query },
+        // Primary: streaming (SSE) — real pipeline steps + answer tokens.
+        let acc = "";
+        let revealed = false;
+        await streamSearch(query, {
+          onStep: (s) => setStreamSteps((prev) => (prev.includes(s) ? prev : [...prev, s])),
+          onToken: (t) => {
+            acc += t;
+            if (!revealed) { revealed = true; setLoading(false); } // swap loader → growing answer
+            setAiAnswer(acc);
+          },
+          onResult: (r) => {
+            if (r.answer) setAiAnswer(r.answer);
+            setAiTrace(r.trace ?? null);
+            if (Array.isArray(r.sources)) setResults(mapSources(r.sources));
+            setLoading(false);
+          },
         });
-
-        if (fnError) throw fnError;
-
-        if (data?.answer) {
-          setAiAnswer(data.answer);
+      } catch (streamErr) {
+        // Fallback: buffered (non-streaming) call if streaming is unavailable.
+        console.warn("Streaming failed, falling back to buffered search:", streamErr);
+        try {
+          const { data, error: fnError } = await supabase.functions.invoke("search-documents", { body: { query } });
+          if (fnError) throw fnError;
+          if (data?.answer) setAiAnswer(data.answer);
+          setAiTrace(data?.trace ?? null);
+          if (data?.sources && Array.isArray(data.sources)) setResults(mapSources(data.sources));
+        } catch (err) {
+          console.error("Search error:", err);
+          setError("Failed to search documents. Please try again.");
+          toast.error("Search failed. Please try again.");
         }
-
-        setAiTrace(data?.trace ?? null);
-
-        if (data?.sources && Array.isArray(data.sources)) {
-          const mapped: DocumentResult[] = data.sources.map((source: any, index: number) => ({
-            id: source.document_id || String(index),
-            type: mapDocumentType(source.document_type),
-            contentType: (source.content_type === "tabular" || mapDocumentType(source.document_type) === "sheet") ? "tabular" : "prose",
-            title: source.document_title || "Untitled Document",
-            matchScore: Math.round((source.similarity || 0) * 100),
-            owner: source.document_owner || "",
-            snippet: source.snippet || source.chunk_text || "",
-            excerpts: source.chunk_text ? [source.chunk_text] : [],
-            url: source.document_url,
-          }));
-          setResults(mapped);
-        }
-      } catch (err: any) {
-        console.error("Search error:", err);
-        setError("Failed to search documents. Please try again.");
-        toast.error("Search failed. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -240,7 +292,7 @@ const Search = () => {
       </div>
 
       {/* Loading State — Pipeline Steps */}
-      {loading && <PipelineLoader />}
+      {loading && <PipelineLoader steps={streamSteps} />}
 
       {/* Error State */}
       {error && !loading && (

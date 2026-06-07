@@ -1,7 +1,9 @@
 // Synthesis adapter (Day 9) — turns SQL result rows into a grounded natural-language
 // answer. The prompt forbids inventing numbers: the model may only restate values
 // present in the rows. Vector-mode synthesis stays inline in index.ts (unchanged).
-import { callClaude, HAIKU } from "../_shared/anthropic.ts";
+import { callClaude, callClaudeStream, HAIKU } from "../_shared/anthropic.ts";
+
+export type OnToken = (text: string) => void;
 
 const MAX_TABLE_ROWS = 20;
 
@@ -29,18 +31,12 @@ export async function synthesizeSqlAnswer(
   rowCount: number,
   truncated: boolean,
   apiKey: string,
+  onToken?: OnToken,
 ): Promise<string> {
   const tag = `${rowCount} row${rowCount === 1 ? "" : "s"}${truncated ? ", truncated at 1000" : ""}`;
   const user = `QUESTION: ${query}\n\nSQL RESULT (${tag}):\n${toMarkdownTable(rows)}`;
-  return await callClaude({
-    apiKey,
-    model: HAIKU,
-    system: SYSTEM,
-    user,
-    maxTokens: 400,
-    temperature: 0,
-    timeoutMs: 20000,
-  });
+  const opts = { apiKey, model: HAIKU, system: SYSTEM, user, maxTokens: 400, temperature: 0, timeoutMs: 20000 };
+  return onToken ? await callClaudeStream(opts, onToken) : await callClaude(opts);
 }
 
 const HYBRID_SYSTEM = `You answer a Product Manager's question using a SQL result (the authoritative counts/filters) PLUS verbatim customer feedback evidence.
@@ -59,6 +55,7 @@ export async function synthesizeHybridAnswer(
   truncated: boolean,
   evidence: string[],
   apiKey: string,
+  onToken?: OnToken,
 ): Promise<string> {
   const tag = `${rowCount} row${rowCount === 1 ? "" : "s"}${truncated ? ", truncated at 1000" : ""}`;
   const evidenceBlock = evidence.length
@@ -67,13 +64,6 @@ export async function synthesizeHybridAnswer(
   const user =
     `QUESTION: ${query}\n\nSQL RESULT (${tag}):\n${toMarkdownTable(rows)}\n\n` +
     `CUSTOMER FEEDBACK EVIDENCE:\n${evidenceBlock}`;
-  return await callClaude({
-    apiKey,
-    model: HAIKU,
-    system: HYBRID_SYSTEM,
-    user,
-    maxTokens: 450,
-    temperature: 0,
-    timeoutMs: 20000,
-  });
+  const opts = { apiKey, model: HAIKU, system: HYBRID_SYSTEM, user, maxTokens: 450, temperature: 0, timeoutMs: 20000 };
+  return onToken ? await callClaudeStream(opts, onToken) : await callClaude(opts);
 }

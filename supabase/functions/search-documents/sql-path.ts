@@ -46,6 +46,11 @@ export interface SqlPathResult {
   };
 }
 
+export interface SqlPathHooks {
+  onStep?: (step: string) => void;
+  onToken?: (text: string) => void;
+}
+
 export async function runSqlPath(
   query: string,
   userId: string,
@@ -53,9 +58,12 @@ export async function runSqlPath(
   anthropicKey: string,
   enableHybrid: boolean,
   vectorSearch?: VectorSearchFn,
+  hooks: SqlPathHooks = {},
 ): Promise<SqlPathResult | null> {
   if (!registryRows.length) return null; // no tables → vector
+  const step = (s: string) => hooks.onStep?.(s);
 
+  step("routing");
   const summary = buildRegistrySummary(registryRows);
   const decision = await routeQuery(query, summary, anthropicKey);
 
@@ -69,7 +77,9 @@ export async function runSqlPath(
 
   const pg = createPgClient();
   try {
+    step("generating_sql");
     const gen = await generateSql(query, schema, anthropicKey, useSonnet);
+    step("executing");
     const exec = await runSql(pg, userId, gen.sql, allowed);
 
     // Executor rejected or DB errored → fall back to vector rather than show
@@ -91,6 +101,7 @@ export async function runSqlPath(
       const sqlIds = accountIdsFromRows(rows);
       let evidence: string[] = [];
       if (vectorSearch && sqlIds.size > 0) {
+        step("matching_feedback");
         try {
           const chunks = await vectorSearch(query);
           evidence = chunks
@@ -102,12 +113,14 @@ export async function runSqlPath(
           console.error(`hybrid vector search failed (continuing SQL-only): ${(e as Error).message}`);
         }
       }
+      step("synthesizing");
       answer = await synthesizeHybridAnswer(
-        query, rows, exec.row_count ?? 0, exec.truncated ?? false, evidence, anthropicKey,
+        query, rows, exec.row_count ?? 0, exec.truncated ?? false, evidence, anthropicKey, hooks.onToken,
       );
     } else {
+      step("synthesizing");
       answer = await synthesizeSqlAnswer(
-        query, rows, exec.row_count ?? 0, exec.truncated ?? false, anthropicKey,
+        query, rows, exec.row_count ?? 0, exec.truncated ?? false, anthropicKey, hooks.onToken,
       );
     }
 
