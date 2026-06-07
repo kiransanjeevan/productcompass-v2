@@ -1,4 +1,19 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { runSqlPath } from "./sql-path.ts";
+import type { RegistryRow } from "./registry.ts";
+
+// Day 10: text-to-SQL routing flags. All default OFF → /search behaves exactly
+// as before until deliberately enabled.
+const ENABLE_SQL_ROUTER = Deno.env.get("ENABLE_SQL_ROUTER") === "true";
+const ENABLE_HYBRID = Deno.env.get("ENABLE_HYBRID") === "true";
+// CSV of user_ids for gradual rollout; empty = all users (when the router is on).
+const SQL_USER_ALLOWLIST = (Deno.env.get("SQL_USER_ALLOWLIST") ?? "")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+
+function sqlRoutingAllowed(userId: string): boolean {
+  if (!ENABLE_SQL_ROUTER) return false;
+  return SQL_USER_ALLOWLIST.length === 0 || SQL_USER_ALLOWLIST.includes(userId);
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,7 +52,7 @@ const FALLBACK_PROMPTS: Record<string, PromptTemplate> = {
 /** Load a prompt template from the DB. Falls back to hardcoded defaults on any error. */
 async function getPrompt(
   slug: string,
-  serviceClient: ReturnType<typeof createClient>,
+  serviceClient: SupabaseClient<any, any, any>,
   version?: number,
 ): Promise<PromptTemplate> {
   try {
@@ -182,6 +197,29 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Day 10: text-to-SQL routing. Flag-gated; on any miss (vector route, no
+    // tables, error) it returns null and we fall through to the vector path.
+    if (sqlRoutingAllowed(user.id)) {
+      const { data: registryRows } = await promptServiceClient
+        .from("sheet_registry")
+        .select("table_name, document_title, row_count, columns")
+        .eq("user_id", user.id);
+
+      const sqlResult = await runSqlPath(
+        query,
+        user.id,
+        (registryRows ?? []) as RegistryRow[],
+        anthropicKey,
+        ENABLE_HYBRID,
+      );
+      if (sqlResult) {
+        return new Response(JSON.stringify(sqlResult), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const [synthesisPrompt, expansionPrompt] = await Promise.all([
       getPrompt("search_synthesis", promptServiceClient, prompt_version),
       getPrompt("query_expansion", promptServiceClient, qe_version),
