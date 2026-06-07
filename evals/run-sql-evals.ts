@@ -1,0 +1,101 @@
+// Text-to-SQL eval runner (Day 14). Runs the golden questions through the real
+// router → generator → executor and scores:
+//   - routing accuracy   (predicted mode == expected mode)
+//   - exec pass rate     (generated SQL ran without error)
+//   - scalar correctness (numeric result within tolerance of expected)
+//   - tables jaccard     (|gen ∩ expected| / |gen ∪ expected|)
+//
+// Run from repo root:
+//   SUPABASE_DB_URL='...session-pooler...' \
+//     deno run --env-file=.env.evals --unsafely-ignore-certificate-errors=<host> \
+//     --allow-net --allow-read --allow-env evals/run-sql-evals.ts
+import { createPgClient } from "../supabase/functions/_shared/pg-client.ts";
+import { buildRegistrySummary, buildSchemaPrompt, type RegistryRow } from "../supabase/functions/search-documents/registry.ts";
+import { routeQuery } from "../supabase/functions/search-documents/router.ts";
+import { generateSql } from "../supabase/functions/search-documents/sql-generator.ts";
+import { runSql } from "../supabase/functions/search-documents/sql-executor.ts";
+
+interface Golden {
+  id: string; query: string; expected_mode: string; result_type: string;
+  expected_value?: number; tolerance_rel?: number; min_rows?: number; expected_tables: string[];
+}
+
+const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+if (!apiKey) { console.error("ANTHROPIC_API_KEY missing (--env-file=.env.evals)"); Deno.exit(1); }
+const UID = "8997243a-60eb-48f3-a0b7-a68bcc059b6c";
+
+const golden: Golden[] = JSON.parse(await Deno.readTextFile(new URL("./sql-golden.json", import.meta.url)));
+const sql = createPgClient();
+const reg = (await sql.unsafe(
+  `SELECT table_name, document_title, row_count, columns FROM sheet_registry WHERE user_id=$1`, [UID],
+)) as unknown as RegistryRow[];
+const summary = buildRegistrySummary(reg);
+const schema = buildSchemaPrompt(reg);
+const allowed = reg.map((r) => r.table_name);
+// Map friendly titles → real table names so expected_tables can be compared.
+const titleToTable = new Map(reg.map((r) => [r.document_title, r.table_name]));
+
+const firstNumeric = (rows: Record<string, unknown>[]): number | null => {
+  if (!rows.length) return null;
+  for (const v of Object.values(rows[0])) {
+    const n = Number(v);
+    if (!Number.isNaN(n)) return n;
+  }
+  return null;
+};
+const jaccard = (a: string[], b: string[]) => {
+  const A = new Set(a), B = new Set(b);
+  if (A.size === 0 && B.size === 0) return 1;
+  const inter = [...A].filter((x) => B.has(x)).length;
+  return inter / new Set([...a, ...b]).size;
+};
+
+let routeHits = 0, execPass = 0, scalarTotal = 0, scalarHits = 0;
+const jaccards: number[] = [];
+
+for (const g of golden) {
+  const d = await routeQuery(g.query, summary, apiKey!);
+  const routeOk = d.mode === g.expected_mode;
+  if (routeOk) routeHits++;
+  let detail = `route=${d.mode}${routeOk ? "✓" : `✗(want ${g.expected_mode})`}`;
+
+  if (g.expected_mode !== "vector" && d.mode !== "vector") {
+    try {
+      const gen = await generateSql(g.query, schema, apiKey!, d.confidence < 0.7);
+      const exec = await runSql(sql, UID, gen.sql, allowed);
+      if (exec.error) {
+        detail += ` exec=ERR(${exec.error})`;
+      } else {
+        execPass++;
+        // tables: map expected friendly names to real table names
+        const wantTables = g.expected_tables.map((t) => titleToTable.get(t) ?? t);
+        const j = jaccard(gen.tables_used.map((t) => t.toLowerCase()), wantTables.map((t) => t.toLowerCase()));
+        jaccards.push(j);
+        detail += ` exec✓ rows=${exec.row_count} jaccard=${j.toFixed(2)}`;
+        if (g.result_type === "scalar") {
+          scalarTotal++;
+          const got = firstNumeric(exec.rows ?? []);
+          const tol = (g.tolerance_rel ?? 0) * Math.abs(g.expected_value ?? 0);
+          const ok = got !== null && Math.abs(got - (g.expected_value ?? 0)) <= Math.max(tol, 1e-9);
+          if (ok) scalarHits++;
+          detail += ` value=${got}${ok ? "✓" : `✗(want ${g.expected_value})`}`;
+        } else if (g.min_rows && (exec.row_count ?? 0) < g.min_rows) {
+          detail += ` ⚠ rows<${g.min_rows}`;
+        }
+      }
+    } catch (e) {
+      detail += ` GEN-ERR(${(e as Error).message})`;
+    }
+  }
+  console.log(`${g.id.padEnd(7)} ${routeOk ? "✅" : "❌"} ${detail}`);
+}
+await sql.end();
+
+const n = golden.length;
+const sqlN = golden.filter((g) => g.expected_mode !== "vector").length;
+const avgJ = jaccards.length ? (jaccards.reduce((a, b) => a + b, 0) / jaccards.length) : 0;
+console.log("\n──────── SUMMARY ────────");
+console.log(`router_accuracy:    ${routeHits}/${n} (${(100 * routeHits / n).toFixed(0)}%)`);
+console.log(`sql_exec_pass_rate: ${execPass}/${sqlN} (${(100 * execPass / sqlN).toFixed(0)}%)`);
+console.log(`scalar_correctness: ${scalarHits}/${scalarTotal}`);
+console.log(`tables_used_jaccard (avg): ${avgJ.toFixed(2)}`);

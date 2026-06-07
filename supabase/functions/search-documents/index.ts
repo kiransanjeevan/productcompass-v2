@@ -206,12 +206,32 @@ Deno.serve(async (req) => {
         .select("table_name, document_title, row_count, columns")
         .eq("user_id", user.id);
 
+      // Hybrid reconciliation needs a vector search over account_id-tagged chunks.
+      const vectorSearch = async (q: string) => {
+        const emb = await embedQuery(q, openaiKey);
+        if (!emb) return [];
+        const { data: matches } = await promptServiceClient.rpc("match_documents", {
+          query_embedding: emb,
+          match_count: 20,
+          match_threshold: 0.2,
+          user_uuid: user.id,
+          theme_filter: null,
+        });
+        return (matches ?? [])
+          .map((m: any) => ({
+            chunk_text: m.chunk_text ?? "",
+            account_ids: (m.metadata?.account_ids ?? []) as string[],
+          }))
+          .filter((c: { account_ids: string[] }) => c.account_ids.length > 0);
+      };
+
       const sqlResult = await runSqlPath(
         query,
         user.id,
         (registryRows ?? []) as RegistryRow[],
         anthropicKey,
         ENABLE_HYBRID,
+        vectorSearch,
       );
       if (sqlResult) {
         return new Response(JSON.stringify(sqlResult), {

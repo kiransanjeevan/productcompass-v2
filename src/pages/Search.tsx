@@ -6,6 +6,7 @@ import DocumentDetailPanel from "@/components/search/DocumentDetailPanel";
 import TabularSnippet from "@/components/search/TabularSnippet";
 import { PMButton } from "@/components/ui/pm-button";
 import { PMBadge } from "@/components/ui/pm-badge";
+import { AnswerTrace, type SearchTrace } from "@/components/search/AnswerTrace";
 import { StaggerContainer, StaggerItem } from "@/components/ui/stagger-children";
 import { SkeletonShimmer } from "@/components/ui/skeleton-shimmer";
 import { ArrowLeft, FileText, Presentation, Sheet, ExternalLink, Sparkles, X, Loader2, AlertTriangle, MessageSquare, Zap, Database, Filter, FileSearch, CheckCircle } from "lucide-react";
@@ -109,6 +110,7 @@ const Search = () => {
 
   const [results, setResults] = useState<DocumentResult[]>([]);
   const [aiAnswer, setAiAnswer] = useState("");
+  const [aiTrace, setAiTrace] = useState<SearchTrace | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,6 +129,7 @@ const Search = () => {
       setError(null);
       setResults([]);
       setAiAnswer("");
+      setAiTrace(null);
       setShowSummary(true);
 
       try {
@@ -139,6 +142,8 @@ const Search = () => {
         if (data?.answer) {
           setAiAnswer(data.answer);
         }
+
+        setAiTrace(data?.trace ?? null);
 
         if (data?.sources && Array.isArray(data.sources)) {
           const mapped: DocumentResult[] = data.sources.map((source: any, index: number) => ({
@@ -275,13 +280,20 @@ const Search = () => {
                       <Sparkles className="h-4 w-4 text-primary" />
                     </div>
                     <span className="font-semibold text-foreground">AI Summary</span>
-                    <PMBadge variant="info" className="text-[10px] ml-1">
-                      {results.length} source{results.length !== 1 ? "s" : ""}
-                    </PMBadge>
+                    {aiTrace && aiTrace.mode !== "vector" ? (
+                      <PMBadge variant="success" className="text-[10px] ml-1">
+                        computed from your data
+                      </PMBadge>
+                    ) : (
+                      <PMBadge variant="info" className="text-[10px] ml-1">
+                        {results.length} source{results.length !== 1 ? "s" : ""}
+                      </PMBadge>
+                    )}
                   </div>
                   <div className="text-sm text-foreground leading-relaxed prose prose-invert prose-sm max-w-none prose-headings:text-foreground prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:text-foreground prose-a:text-primary">
                     <ReactMarkdown>{aiAnswer}</ReactMarkdown>
                   </div>
+                  {aiTrace && <AnswerTrace trace={aiTrace} />}
                 </div>
               </div>
             </motion.div>

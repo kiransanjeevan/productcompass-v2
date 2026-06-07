@@ -43,6 +43,9 @@ function isTabularContent(text: string): boolean {
 interface ChunkResult {
   chunks: string[];
   content_type: "tabular" | "prose";
+  // Day 11: per-chunk account_ids (tabular only), index-aligned with `chunks`,
+  // so the hybrid path can join vector hits to SQL results. [] for prose.
+  chunk_account_ids: string[][];
 }
 
 function chunkText(text: string, title: string, chunkSize = CHUNK_SIZE, chunkOverlap = CHUNK_OVERLAP): ChunkResult {
@@ -51,35 +54,62 @@ function chunkText(text: string, title: string, chunkSize = CHUNK_SIZE, chunkOve
   const prefix = `Document: ${title}\n\n`;
 
   if (isTabularContent(sanitized)) {
-    return { chunks: chunkTabular(sanitized, prefix, chunkSize), content_type: "tabular" };
+    return { ...chunkTabular(sanitized, prefix, chunkSize), content_type: "tabular" };
   }
 
-  return { chunks: chunkProse(sanitized, prefix, chunkSize, chunkOverlap), content_type: "prose" };
+  return {
+    chunks: chunkProse(sanitized, prefix, chunkSize, chunkOverlap),
+    content_type: "prose",
+    chunk_account_ids: [],
+  };
 }
 
-/** Chunk tabular/CSV content — keeps header row with every chunk, splits at row boundaries */
-function chunkTabular(text: string, prefix: string, chunkSize: number): string[] {
+/** Find the index of an account-id-like column in a CSV header (or -1). */
+function findAccountIdColumn(headerLine: string): number {
+  const cols = headerLine.split(",").map((h) => h.trim().toLowerCase());
+  return cols.findIndex((h) => h === "account_id" || h === "accountid" || h === "account id");
+}
+
+/**
+ * Chunk tabular/CSV content — keeps the header row with every chunk, splits at
+ * row boundaries, and records the distinct account_ids in each chunk (Day 11).
+ * The id capture uses a naive comma split, fine because id values (e.g.
+ * "A-2e4581") never contain commas.
+ */
+function chunkTabular(text: string, prefix: string, chunkSize: number): Omit<ChunkResult, "content_type"> {
   const lines = text.split("\n");
   const headerLine = lines[0] || "";
   const dataLines = lines.slice(1);
+  const idCol = findAccountIdColumn(headerLine);
   const chunks: string[] = [];
+  const chunkAccountIds: string[][] = [];
   const chunkHeader = prefix + headerLine + "\n";
   let currentChunk = chunkHeader;
+  let currentIds = new Set<string>();
+
+  const flush = () => {
+    chunks.push(currentChunk);
+    chunkAccountIds.push([...currentIds]);
+    currentChunk = chunkHeader;
+    currentIds = new Set<string>();
+  };
 
   for (const line of dataLines) {
     if (!line.trim()) continue;
     if (currentChunk.length + line.length + 1 > chunkSize && currentChunk !== chunkHeader) {
-      chunks.push(currentChunk);
-      currentChunk = chunkHeader;
+      flush();
     }
     currentChunk += line + "\n";
+    if (idCol >= 0) {
+      const v = line.split(",")[idCol]?.trim();
+      if (v) currentIds.add(v);
+    }
   }
 
-  if (currentChunk !== chunkHeader) {
-    chunks.push(currentChunk);
-  }
+  if (currentChunk !== chunkHeader) flush();
 
-  return chunks.length > 0 ? chunks : [prefix + "(empty document)"];
+  if (chunks.length === 0) return { chunks: [prefix + "(empty document)"], chunk_account_ids: [[]] };
+  return { chunks, chunk_account_ids: chunkAccountIds };
 }
 
 /** Chunk prose content — prefers paragraph boundaries over mid-sentence splits */
@@ -410,7 +440,7 @@ Deno.serve(async (req) => {
         const content = await fetchFileContent(file.id, file.mimeType, googleToken);
         if (!content) continue;
 
-        const { chunks, content_type } = chunkText(content, file.name, chunkSize, chunkOverlap);
+        const { chunks, content_type, chunk_account_ids } = chunkText(content, file.name, chunkSize, chunkOverlap);
         const docType = getDocType(file.mimeType);
         const docUrl = getDocUrl(file.id, file.mimeType);
         const ownerEmail = file.owners?.[0]?.emailAddress || null;
@@ -447,7 +477,13 @@ Deno.serve(async (req) => {
           chunk_index: idx,
           chunk_text: chunkText,
           embedding: allEmbeddings[idx] ? JSON.stringify(allEmbeddings[idx]) : null,
-          metadata: { source: "google_drive", content_type },
+          metadata: {
+            source: "google_drive",
+            content_type,
+            // Day 11: account_ids present in this chunk (tabular only) — the
+            // join key for hybrid reconciliation. Omitted when none.
+            ...(chunk_account_ids[idx]?.length ? { account_ids: chunk_account_ids[idx] } : {}),
+          },
         }));
 
         const { error: insertError } = await serviceClient
