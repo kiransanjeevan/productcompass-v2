@@ -35,7 +35,7 @@ export function CodeBlock({ code, language = "sql", className }: CodeBlockProps)
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="overflow-x-auto p-3 text-xs leading-relaxed text-foreground/90">
+      <pre className="whitespace-pre-wrap break-words p-3 text-xs leading-relaxed text-foreground/90">
         <code>{code}</code>
       </pre>
     </div>

@@ -16,6 +16,17 @@ export interface SearchTrace {
   evidence_chunks?: number;
 }
 
+/** Make the executed SQL readable: drop the per-user table prefix, collapse
+ *  whitespace, and break before major clauses. Display-only — never re-executed. */
+function formatSql(sql: string): string {
+  return sql
+    .replace(/u_[0-9a-f]{32}_/gi, "")                     // u_<uid>_accounts → accounts
+    .replace(/\s+/g, " ")
+    .replace(/\s+(FROM|WHERE|GROUP BY|HAVING|ORDER BY|LIMIT|LEFT JOIN|RIGHT JOIN|INNER JOIN|JOIN|UNION ALL|UNION)\b/gi, "\n$1")
+    .replace(/\(\s*1000\s*\)/g, "1000")                   // LIMIT (1000) → LIMIT 1000
+    .trim();
+}
+
 const MODE_META: Record<SearchTrace["mode"], { label: string; icon: typeof Database; variant: "info" | "success" | "default" }> = {
   sql: { label: "SQL", icon: Database, variant: "success" },
   hybrid: { label: "Hybrid", icon: Layers, variant: "info" },
@@ -51,7 +62,7 @@ export function AnswerTrace({ trace }: { trace: SearchTrace }) {
               {typeof trace.router_confidence === "number" && ` (confidence ${trace.router_confidence})`}
             </p>
           )}
-          {trace.sql && <CodeBlock code={trace.sql} language="sql" />}
+          {trace.sql && <CodeBlock code={formatSql(trace.sql)} language="sql" />}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
             {trace.tables_used?.length ? <span>Tables: {trace.tables_used.join(", ")}</span> : null}
             {trace.truncated ? <span className="text-amber-400">Truncated at 1000 rows</span> : null}

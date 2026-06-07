@@ -279,7 +279,9 @@ const Search = () => {
         {!loading && !error && (
           <div className="flex items-center gap-3">
             <p className="text-sm text-muted-foreground">
-              Found {results.length} document{results.length !== 1 ? "s" : ""} · Ranked by relevance
+              {aiTrace && aiTrace.mode !== "vector"
+                ? "Answered directly from your data"
+                : `Found ${results.length} document${results.length !== 1 ? "s" : ""} · Ranked by relevance`}
             </p>
             {aiAnswer && (
               <PMButton variant="glass" size="sm" onClick={() => setShowSummary(!showSummary)} className="gap-1.5">
@@ -302,8 +304,8 @@ const Search = () => {
         </div>
       )}
 
-      {/* Empty State */}
-      {!loading && !error && results.length === 0 && query && (
+      {/* Empty State — only when there's genuinely no answer (vector path found nothing) */}
+      {!loading && !error && results.length === 0 && query && !aiAnswer && (
         <div className="text-center py-16">
           <p className="text-muted-foreground mb-2">No documents matched your query.</p>
           <p className="text-sm text-muted-foreground">Try a different search term or make sure your documents are indexed.</p>
