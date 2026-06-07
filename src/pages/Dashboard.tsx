@@ -243,7 +243,7 @@ const Dashboard = () => {
             className="w-full mb-12 h-14 rounded-lg glass flex items-center gap-3 px-5 text-left transition-all duration-200 hover:shadow-glow group"
           >
             <Search className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            <span className="text-base text-muted-foreground flex-1">Search your documents...</span>
+            <span className="text-base text-muted-foreground flex-1">Ask about your documents and data...</span>
             <kbd className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
               <span>{"\u2318"}</span>
               <span>K</span>

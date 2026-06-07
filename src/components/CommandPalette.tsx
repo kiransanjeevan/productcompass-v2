@@ -59,7 +59,7 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
             }}
           >
             <CommandInput
-              placeholder="Search documents, navigate, or take action..."
+              placeholder="Ask about your docs & data, navigate, or take action..."
               value={query}
               onValueChange={setQuery}
               className="h-14 w-full text-base border-0 focus:ring-0 bg-transparent placeholder:text-muted-foreground/60 pr-14"
