@@ -10,9 +10,8 @@
 //     deno run --env-file=.env.evals --unsafely-ignore-certificate-errors=<host> \
 //     --allow-net --allow-read --allow-env evals/run-sql-evals.ts
 import { createPgClient } from "../supabase/functions/_shared/pg-client.ts";
-import { buildRegistrySummary, buildSchemaPrompt, type RegistryRow } from "../supabase/functions/search-documents/registry.ts";
-import { routeQuery } from "../supabase/functions/search-documents/router.ts";
-import { generateSql } from "../supabase/functions/search-documents/sql-generator.ts";
+import { buildSchemaPrompt, type RegistryRow } from "../supabase/functions/search-documents/registry.ts";
+import { routeAndGenerate } from "../supabase/functions/search-documents/route-and-generate.ts";
 import { runSql } from "../supabase/functions/search-documents/sql-executor.ts";
 
 interface Golden {
@@ -29,7 +28,6 @@ const sql = createPgClient();
 const reg = (await sql.unsafe(
   `SELECT table_name, document_title, row_count, columns FROM sheet_registry WHERE user_id=$1`, [UID],
 )) as unknown as RegistryRow[];
-const summary = buildRegistrySummary(reg);
 const schema = buildSchemaPrompt(reg);
 const allowed = reg.map((r) => r.table_name);
 // Map friendly titles → real table names so expected_tables can be compared.
@@ -54,22 +52,21 @@ let routeHits = 0, execPass = 0, scalarTotal = 0, scalarHits = 0;
 const jaccards: number[] = [];
 
 for (const g of golden) {
-  const d = await routeQuery(g.query, summary, apiKey!);
-  const routeOk = d.mode === g.expected_mode;
+  const plan = await routeAndGenerate(g.query, schema, apiKey!);
+  const routeOk = plan.mode === g.expected_mode;
   if (routeOk) routeHits++;
-  let detail = `route=${d.mode}${routeOk ? "✓" : `✗(want ${g.expected_mode})`}`;
+  let detail = `route=${plan.mode}${routeOk ? "✓" : `✗(want ${g.expected_mode})`}`;
 
-  if (g.expected_mode !== "vector" && d.mode !== "vector") {
+  if (g.expected_mode !== "vector" && plan.mode !== "vector") {
     try {
-      const gen = await generateSql(g.query, schema, apiKey!, d.confidence < 0.7);
-      const exec = await runSql(sql, UID, gen.sql, allowed);
+      const exec = await runSql(sql, UID, plan.sql, allowed);
       if (exec.error) {
         detail += ` exec=ERR(${exec.error})`;
       } else {
         execPass++;
         // tables: map expected friendly names to real table names
         const wantTables = g.expected_tables.map((t) => titleToTable.get(t) ?? t);
-        const j = jaccard(gen.tables_used.map((t) => t.toLowerCase()), wantTables.map((t) => t.toLowerCase()));
+        const j = jaccard(plan.tables_used.map((t) => t.toLowerCase()), wantTables.map((t) => t.toLowerCase()));
         jaccards.push(j);
         detail += ` exec✓ rows=${exec.row_count} jaccard=${j.toFixed(2)}`;
         if (g.result_type === "scalar") {
