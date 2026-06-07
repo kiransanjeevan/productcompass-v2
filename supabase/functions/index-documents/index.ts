@@ -1,4 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createPgClient, type PgClient } from "../_shared/pg-client.ts";
+import { materializeCsvAsTable } from "./materialize-sql.ts";
+
+// Day 5: when ON, tabular files are ALSO mirrored into the sheets schema as typed
+// SQL tables (for the text-to-SQL path). Default OFF → existing vector indexing
+// is completely unchanged. This is the kill switch for the whole feature.
+const MATERIALIZE_SHEETS = Deno.env.get("MATERIALIZE_SHEETS") === "true";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -249,6 +256,11 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Day 5: lazy Postgres client for sheet materialization. Created on first
+  // tabular file only (so non-tabular batches pay nothing); closed in finally
+  // so the connection is always released, on success or error.
+  let pg: PgClient | null = null;
+
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -445,6 +457,26 @@ Deno.serve(async (req) => {
         if (insertError) {
           console.error(`Insert error for ${file.name}:`, insertError);
         }
+
+        // Day 5: ALSO mirror tabular files into a typed SQL table. Isolated in
+        // its own try/catch — a materialization failure must never break the
+        // (working) vector path above, which already committed its chunks.
+        if (MATERIALIZE_SHEETS && content_type === "tabular") {
+          try {
+            pg = pg ?? createPgClient();
+            // Strip null bytes (Postgres rejects them) — same guard as chunkText.
+            const cleanCsv = content.replace(/\0/g, "");
+            const res = await materializeCsvAsTable(
+              pg,
+              user.id,
+              { id: file.id, title: file.name },
+              cleanCsv,
+            );
+            console.log(`Materialized ${file.name} → sheets.${res.tableName} (${res.rowCount} rows)`);
+          } catch (matErr) {
+            console.error(`Materialization failed for ${file.name} (vector chunks unaffected):`, matErr);
+          }
+        }
       } catch (err) {
         console.error(`Error processing file ${file.name}:`, err);
         continue;
@@ -463,5 +495,7 @@ Deno.serve(async (req) => {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  } finally {
+    if (pg) await pg.end();
   }
 });
