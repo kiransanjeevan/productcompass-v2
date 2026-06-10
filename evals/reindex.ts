@@ -36,6 +36,9 @@ async function getAccessToken(): Promise<string> {
 async function reindex(accessToken: string): Promise<void> {
   const functionUrl = `${SUPABASE_URL}/functions/v1/index-documents`;
   const startOffset = parseInt(Deno.env.get("REINDEX_OFFSET") || "0", 10);
+  const chunkSize = Deno.env.get("REINDEX_CHUNK_SIZE");
+  const chunkOverlap = Deno.env.get("REINDEX_CHUNK_OVERLAP");
+  if (chunkSize) console.log(`chunk_size=${chunkSize}, chunk_overlap=${chunkOverlap ?? "default"}`);
   let offset = startOffset;
   let remaining = 1; // start loop
 
@@ -49,7 +52,11 @@ async function reindex(accessToken: string): Promise<void> {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ offset }),
+      body: JSON.stringify({
+        offset,
+        ...(chunkSize ? { chunk_size: Number(chunkSize) } : {}),
+        ...(chunkOverlap ? { chunk_overlap: Number(chunkOverlap) } : {}),
+      }),
     });
 
     if (!res.ok) {

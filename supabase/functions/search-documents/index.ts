@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runSqlPath } from "./sql-path.ts";
 import type { RegistryRow } from "./registry.ts";
-import { callClaudeStream } from "../_shared/anthropic.ts";
+import { callClaude, callClaudeStream, parseJsonLoose } from "../_shared/anthropic.ts";
 
 // Day 10: text-to-SQL routing flags. All default OFF → /search behaves exactly
 // as before until deliberately enabled.
@@ -95,37 +95,16 @@ async function expandQuery(
 ): Promise<string[]> {
   try {
     const userContent = applyTemplate(prompt.user_prompt_template, { query });
-
-    const messages: any[] = [{ role: "user", content: userContent }];
-
-    const body: any = {
+    const text = await callClaude({
+      apiKey: anthropicKey,
       model: prompt.model,
-      max_tokens: prompt.max_tokens,
+      system: prompt.system_prompt ?? undefined,
+      user: userContent,
+      maxTokens: prompt.max_tokens,
       temperature: prompt.temperature,
-      messages,
-    };
-    if (prompt.system_prompt) {
-      body.system = prompt.system_prompt;
-    }
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
     });
-
-    if (!res.ok) return [query];
-
-    const data = await res.json();
-    const raw = data.content?.[0]?.text || "[]";
-    const text = raw.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
-    const variants: string[] = JSON.parse(text);
+    const variants = parseJsonLoose<string[]>(text);
     if (!Array.isArray(variants) || variants.length === 0) return [query];
-
     return [query, ...variants];
   } catch {
     return [query];
@@ -445,47 +424,24 @@ Deno.serve(async (req) => {
       chunksContext,
     });
 
-    const synthesisBody: any = {
-      model: synthesisPrompt.model,
-      max_tokens: synthesisPrompt.max_tokens,
-      temperature: synthesisPrompt.temperature,
-      messages: [{ role: "user", content: synthesisUserContent }],
-    };
-    if (synthesisPrompt.system_prompt) {
-      synthesisBody.system = synthesisPrompt.system_prompt;
-    }
-
-    const synthesisController = new AbortController();
-    const synthesisTimeout = setTimeout(() => synthesisController.abort(), 25000);
-
     let answer = "I couldn't generate an answer at this time.";
     try {
-      const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(synthesisBody),
-        signal: synthesisController.signal,
-      });
-
-      if (claudeRes.ok) {
-        const claudeData = await claudeRes.json();
-        answer = claudeData.content?.[0]?.text || answer;
-      } else {
-        console.error("Claude API error:", claudeRes.status, await claudeRes.text());
-      }
+      answer = (await callClaude({
+        apiKey: anthropicKey,
+        model: synthesisPrompt.model,
+        system: synthesisPrompt.system_prompt ?? undefined,
+        user: synthesisUserContent,
+        maxTokens: synthesisPrompt.max_tokens,
+        temperature: synthesisPrompt.temperature,
+        timeoutMs: 25000,
+      })) || answer;
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        console.error("Claude synthesis timed out after 25s");
+        console.error("Synthesis timed out after 25s");
         answer = "The search took too long to process. Please try a more specific query.";
       } else {
-        throw err;
+        console.error("Synthesis error:", (err as Error).message);
       }
-    } finally {
-      clearTimeout(synthesisTimeout);
     }
 
     return new Response(JSON.stringify({ answer, sources, query }), {

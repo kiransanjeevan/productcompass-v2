@@ -119,6 +119,9 @@ interface EvalResults {
     llm_judge_avg: number | null;
     faithfulness_avg: number | null;
     avg_latency_ms: number;
+    p95_latency_ms: number;
+    p99_latency_ms: number;
+    max_latency_ms: number;
     by_category: Record<string, CategoryMetrics>;
     by_difficulty: Record<string, CategoryMetrics>;
   };
@@ -431,6 +434,12 @@ function aggregateResults(results: QueryResult[]): EvalResults["aggregate"] {
   }
 
   const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+  // Nearest-rank percentile (p in [0,1]).
+  const pct = (arr: number[], p: number) => {
+    if (arr.length === 0) return 0;
+    const s = [...arr].sort((a, b) => a - b);
+    return s[Math.min(s.length - 1, Math.ceil(p * s.length) - 1)];
+  };
 
   const llmScores = results
     .map((r) => r.llm_judge_score)
@@ -486,6 +495,9 @@ function aggregateResults(results: QueryResult[]): EvalResults["aggregate"] {
     llm_judge_avg: llmScores.length > 0 ? avg(llmScores) : null,
     faithfulness_avg: faithScores.length > 0 ? avg(faithScores) : null,
     avg_latency_ms: avg(results.map((r) => r.latency_ms)),
+    p95_latency_ms: pct(results.map((r) => r.latency_ms), 0.95),
+    p99_latency_ms: pct(results.map((r) => r.latency_ms), 0.99),
+    max_latency_ms: Math.max(...results.map((r) => r.latency_ms)),
     by_category: categoryMetrics,
     by_difficulty: difficultyMetrics,
   };
@@ -736,7 +748,7 @@ async function main() {
   log("═".repeat(60));
   log(`  Run:                ${runId}`);
   log(`  Queries:            ${aggregate.total_queries}`);
-  log(`  Avg latency:        ${aggregate.avg_latency_ms.toFixed(0)}ms`);
+  log(`  Latency avg/p95/p99/max: ${aggregate.avg_latency_ms.toFixed(0)} / ${aggregate.p95_latency_ms} / ${aggregate.p99_latency_ms} / ${aggregate.max_latency_ms} ms`);
   log("");
   log("  RETRIEVAL METRICS");
   log(`    Recall@${K}:         ${(aggregate.recall_at_k * 100).toFixed(1)}%`);

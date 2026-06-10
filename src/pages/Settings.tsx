@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserDisplayName } from "@/lib/utils";
+import { connectLinear } from "@/lib/linear-auth";
 import { format } from "date-fns";
 
 const Settings = () => {
@@ -22,6 +23,7 @@ const Settings = () => {
   const [docCount, setDocCount] = useState<number | null>(null);
   const [fileCount, setFileCount] = useState<number | null>(null);
   const [hasGoogleTokens, setHasGoogleTokens] = useState(false);
+  const [hasLinearTokens, setHasLinearTokens] = useState(false);
   const [lastIndexedAt, setLastIndexedAt] = useState<string | null>(null);
 
   // Chunking strategy
@@ -87,6 +89,12 @@ const Settings = () => {
         .select("id", { count: "exact", head: true })
         .eq("provider", "google");
       setHasGoogleTokens((tokenCount ?? 0) > 0);
+
+      const { count: linearCount } = await supabase
+        .from("oauth_tokens")
+        .select("id", { count: "exact", head: true })
+        .eq("provider", "linear");
+      setHasLinearTokens((linearCount ?? 0) > 0);
     };
     fetchStats();
   }, [user]);
@@ -147,8 +155,11 @@ const Settings = () => {
 
   const handleDisconnect = async (service: string) => {
     if (user?.id) {
-      await supabase.from("oauth_tokens").delete().eq("user_id", user.id);
-      setHasGoogleTokens(false);
+      // Scope the delete to the provider — the table now holds multiple providers.
+      const provider = service.toLowerCase().includes("linear") ? "linear" : "google";
+      await supabase.from("oauth_tokens").delete().eq("user_id", user.id).eq("provider", provider);
+      if (provider === "linear") setHasLinearTokens(false);
+      else setHasGoogleTokens(false);
     }
     setDisconnectModal(null);
     toast.success(`${service} disconnected`);
@@ -231,6 +242,28 @@ const Settings = () => {
                   )}
                 </div>
               ))}
+
+              {/* Linear (custom OAuth — separate from the Supabase-Auth Google flow) */}
+              <div className="flex items-center justify-between p-4 glass rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Linear</p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className={`w-1.5 h-1.5 rounded-full ${hasLinearTokens ? "bg-success" : "bg-muted-foreground"}`} />
+                    <span className={`text-small ${hasLinearTokens ? "text-success" : "text-muted-foreground"}`}>
+                      {hasLinearTokens ? "Connected" : "Not connected"}
+                    </span>
+                  </div>
+                </div>
+                {hasLinearTokens ? (
+                  <PMButton variant="secondary" size="sm" onClick={() => setDisconnectModal("Linear")}>
+                    Disconnect
+                  </PMButton>
+                ) : (
+                  <PMButton variant="primary" size="sm" onClick={() => connectLinear()}>
+                    Connect
+                  </PMButton>
+                )}
+              </div>
             </div>
           </section>
         </StaggerItem>

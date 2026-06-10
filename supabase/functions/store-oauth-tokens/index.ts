@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
         expires_at,
         scopes: "drive.metadata.readonly drive.readonly documents.readonly calendar.readonly",
       },
-      { onConflict: "user_id" }
+      { onConflict: "user_id,provider" }
     );
 
     if (error) {

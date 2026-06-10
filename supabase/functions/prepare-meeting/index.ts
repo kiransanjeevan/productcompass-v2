@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callClaude, HAIKU } from "../_shared/anthropic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -113,34 +114,19 @@ Description: ${meeting.description || "No description"}`;
       ? matches.map((m: any) => `[Document: ${m.document_title}]\n${m.chunk_text}`).join("\n\n---\n\n")
       : "No relevant documents found.";
 
-    // Call Claude for brief generation
-    const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1000,
-        temperature: 0,
-        system: "You are a meeting preparation assistant for Product Managers. Generate a concise meeting brief based on the meeting details and relevant documents provided. Include: 1) Meeting overview (title, time, attendees), 2) Likely discussion topics based on the meeting title and recent documents, 3) Key context from relevant documents that the PM should review before the meeting. If no relevant documents are found, suggest what topics might come up based on the meeting title and attendees. Be concise and actionable.",
-        messages: [
-          {
-            role: "user",
-            content: `Generate a meeting brief for the following meeting:\n\n${meetingContext}\n\nRelevant documents:\n\n${docsContext}`,
-          },
-        ],
-      }),
-    });
-
+    // Call the LLM for brief generation (provider-swappable via _shared helper)
     let brief = "Unable to generate brief at this time.";
-    if (claudeRes.ok) {
-      const claudeData = await claudeRes.json();
-      brief = claudeData.content?.[0]?.text || brief;
-    } else {
-      console.error("Claude API error:", claudeRes.status, await claudeRes.text());
+    try {
+      brief = (await callClaude({
+        apiKey: anthropicKey,
+        model: HAIKU,
+        system: "You are a meeting preparation assistant for Product Managers. Generate a concise meeting brief based on the meeting details and relevant documents provided. Include: 1) Meeting overview (title, time, attendees), 2) Likely discussion topics based on the meeting title and recent documents, 3) Key context from relevant documents that the PM should review before the meeting. If no relevant documents are found, suggest what topics might come up based on the meeting title and attendees. Be concise and actionable.",
+        user: `Generate a meeting brief for the following meeting:\n\n${meetingContext}\n\nRelevant documents:\n\n${docsContext}`,
+        maxTokens: 1000,
+        temperature: 0,
+      })) || brief;
+    } catch (err) {
+      console.error("Brief generation error:", (err as Error).message);
     }
 
     // Update meeting with brief

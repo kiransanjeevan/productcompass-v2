@@ -13,8 +13,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const BATCH_SIZE = 5;
-const CHUNK_SIZE = 800;
+const BATCH_SIZE = 3; // lowered: finer chunking ~2x'd embeddings/batch, hitting the worker resource limit at 5
+const MAX_CHUNKS_PER_DOC = 200; // bound per-doc embedding work so one huge doc can't exhaust the worker
+const MAX_CONTENT_CHARS = 200_000; // truncate giant docs before chunking to bound worker memory
+const CHUNK_SIZE = 800;   // same-corpus eval: 800/200 ≈ 1500/350 (tie within noise), slight edge on recall+judge. Sentence-aware splitting is the real win, not the size.
 const CHUNK_OVERLAP = 200;
 const EMBEDDING_BATCH_SIZE = 20;
 
@@ -46,6 +48,9 @@ interface ChunkResult {
   // Day 11: per-chunk account_ids (tabular only), index-aligned with `chunks`,
   // so the hybrid path can join vector hits to SQL results. [] for prose.
   chunk_account_ids: string[][];
+  // Per-chunk section heading (prose only), index-aligned with `chunks`. The
+  // nearest preceding heading at the point the chunk was built; null if none.
+  chunk_headings: (string | null)[];
 }
 
 function chunkText(text: string, title: string, chunkSize = CHUNK_SIZE, chunkOverlap = CHUNK_OVERLAP): ChunkResult {
@@ -54,14 +59,11 @@ function chunkText(text: string, title: string, chunkSize = CHUNK_SIZE, chunkOve
   const prefix = `Document: ${title}\n\n`;
 
   if (isTabularContent(sanitized)) {
-    return { ...chunkTabular(sanitized, prefix, chunkSize), content_type: "tabular" };
+    return { ...chunkTabular(sanitized, prefix, chunkSize), content_type: "tabular", chunk_headings: [] };
   }
 
-  return {
-    chunks: chunkProse(sanitized, prefix, chunkSize, chunkOverlap),
-    content_type: "prose",
-    chunk_account_ids: [],
-  };
+  const { chunks, headings } = chunkProse(sanitized, prefix, chunkSize, chunkOverlap);
+  return { chunks, content_type: "prose", chunk_account_ids: [], chunk_headings: headings };
 }
 
 /** Find the index of an account-id-like column in a CSV header (or -1). */
@@ -76,7 +78,7 @@ function findAccountIdColumn(headerLine: string): number {
  * The id capture uses a naive comma split, fine because id values (e.g.
  * "A-2e4581") never contain commas.
  */
-function chunkTabular(text: string, prefix: string, chunkSize: number): Omit<ChunkResult, "content_type"> {
+function chunkTabular(text: string, prefix: string, chunkSize: number): Omit<ChunkResult, "content_type" | "chunk_headings"> {
   const lines = text.split("\n");
   const headerLine = lines[0] || "";
   const dataLines = lines.slice(1);
@@ -112,44 +114,89 @@ function chunkTabular(text: string, prefix: string, chunkSize: number): Omit<Chu
   return { chunks, chunk_account_ids: chunkAccountIds };
 }
 
-/** Chunk prose content — prefers paragraph boundaries over mid-sentence splits */
-function chunkProse(text: string, prefix: string, chunkSize: number, chunkOverlap: number): string[] {
-  const chunks: string[] = [];
-  // Split into paragraphs first
-  const paragraphs = text.split(/\n\n+/);
-  let currentChunk = "";
+/** Split a paragraph into sentences (keeps terminal punctuation). */
+function splitSentences(text: string): string[] {
+  return text.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+}
 
+/** Last-resort hard split for a single oversized sentence. */
+function hardSplit(text: string, maxLen: number, overlap: number): string[] {
+  const out: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    const end = Math.min(start + maxLen, text.length);
+    out.push(text.slice(start, end));
+    if (end >= text.length) break;
+    start += Math.max(1, maxLen - overlap);
+  }
+  return out;
+}
+
+/**
+ * Best-effort heading detection for a single-line paragraph: markdown headings
+ * (`# ...`), ALL-CAPS lines, or short Title-Case lines with no terminal
+ * punctuation. Returns the heading text, or null if the paragraph isn't one.
+ */
+function detectHeading(para: string): string | null {
+  const line = para.trim();
+  if (!line || line.includes("\n")) return null;
+  const md = line.match(/^#{1,6}\s+(.+)$/);
+  if (md) return md[1].trim();
+  if (line.length < 3 || line.length > 80 || /[.!?,;:]$/.test(line)) return null;
+  if (line === line.toUpperCase() && /[A-Z]/.test(line)) return line; // ALL CAPS
+  const words = line.split(/\s+/);
+  if (words.length <= 10 && words.every((w) => /^[A-Z0-9("']/.test(w) || w.length <= 3)) return line; // Title Case
+  return null;
+}
+
+/**
+ * Chunk prose with a recursive, sentence-aware splitter. Splits into
+ * paragraph → sentence → (rarely) char units, each within budget, then packs
+ * units up to chunkSize with overlap — so the size cap actually holds and
+ * chunks never cut mid-sentence. Tags each chunk with the nearest heading.
+ */
+function chunkProse(
+  text: string,
+  prefix: string,
+  chunkSize: number,
+  chunkOverlap: number,
+): { chunks: string[]; headings: (string | null)[] } {
+  const budget = Math.max(100, chunkSize);
+  const paragraphs = text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+
+  // 1. Flatten to units no larger than budget, each tagged with its heading.
+  const units: { text: string; heading: string | null }[] = [];
+  let curHeading: string | null = null;
   for (const para of paragraphs) {
-    const trimmed = para.trim();
-    if (!trimmed) continue;
+    const h = detectHeading(para);
+    if (h) curHeading = h;
+    const pieces = para.length <= budget
+      ? [para]
+      : splitSentences(para).flatMap((s) => (s.length <= budget ? [s] : hardSplit(s, budget, chunkOverlap)));
+    for (const piece of pieces) units.push({ text: piece, heading: curHeading });
+  }
 
-    // If adding this paragraph fits, append it
-    if (currentChunk.length + trimmed.length + 2 <= chunkSize) {
-      currentChunk += (currentChunk ? "\n\n" : "") + trimmed;
-    } else if (!currentChunk) {
-      // Single paragraph exceeds chunk size — fall back to character splitting
-      let start = 0;
-      while (start < trimmed.length) {
-        const end = Math.min(start + chunkSize, trimmed.length);
-        chunks.push(prefix + trimmed.slice(start, end));
-        if (end >= trimmed.length) break;
-        start += chunkSize - chunkOverlap;
-      }
-    } else {
-      // Flush current chunk, then seed the next one with overlap from its tail
-      chunks.push(prefix + currentChunk);
-      const overlapSeed = chunkOverlap > 0 && currentChunk.length > chunkOverlap
-        ? currentChunk.slice(-chunkOverlap)
-        : "";
-      currentChunk = overlapSeed ? overlapSeed + "\n\n" + trimmed : trimmed;
+  // 2. Greedily pack units into chunks, seeding overlap across boundaries.
+  const chunks: string[] = [];
+  const headings: (string | null)[] = [];
+  let cur = "";
+  let curH: string | null = null;
+  for (const u of units) {
+    if (cur && cur.length + u.text.length + 2 > budget) {
+      chunks.push(prefix + cur);
+      headings.push(curH);
+      cur = chunkOverlap > 0 && cur.length > chunkOverlap ? cur.slice(-chunkOverlap) : "";
     }
+    if (!cur) curH = u.heading;
+    cur += (cur ? "\n\n" : "") + u.text;
+  }
+  if (cur.trim()) {
+    chunks.push(prefix + cur);
+    headings.push(curH);
   }
 
-  if (currentChunk) {
-    chunks.push(prefix + currentChunk);
-  }
-
-  return chunks.length > 0 ? chunks : [prefix + "(empty document)"];
+  if (chunks.length === 0) return { chunks: [prefix + "(empty document)"], headings: [null] };
+  return { chunks, headings };
 }
 
 function getMimeExport(mimeType: string): { exportMime: string; method: "export" | "download" } {
@@ -437,10 +484,21 @@ Deno.serve(async (req) => {
     // Process each file in this batch
     for (const file of filesToProcess) {
       try {
-        const content = await fetchFileContent(file.id, file.mimeType, googleToken);
+        let content = await fetchFileContent(file.id, file.mimeType, googleToken);
         if (!content) continue;
+        if (content.length > MAX_CONTENT_CHARS) {
+          console.warn(`Truncating ${file.name}: ${content.length} → ${MAX_CONTENT_CHARS} chars`);
+          content = content.slice(0, MAX_CONTENT_CHARS);
+        }
 
-        const { chunks, content_type, chunk_account_ids } = chunkText(content, file.name, chunkSize, chunkOverlap);
+        const parsed = chunkText(content, file.name, chunkSize, chunkOverlap);
+        const content_type = parsed.content_type;
+        if (parsed.chunks.length > MAX_CHUNKS_PER_DOC) {
+          console.warn(`Capping ${file.name}: ${parsed.chunks.length} chunks → ${MAX_CHUNKS_PER_DOC}`);
+        }
+        const chunks = parsed.chunks.slice(0, MAX_CHUNKS_PER_DOC);
+        const chunk_account_ids = parsed.chunk_account_ids.slice(0, MAX_CHUNKS_PER_DOC);
+        const chunk_headings = parsed.chunk_headings.slice(0, MAX_CHUNKS_PER_DOC);
         const docType = getDocType(file.mimeType);
         const docUrl = getDocUrl(file.id, file.mimeType);
         const ownerEmail = file.owners?.[0]?.emailAddress || null;
@@ -483,6 +541,8 @@ Deno.serve(async (req) => {
             // Day 11: account_ids present in this chunk (tabular only) — the
             // join key for hybrid reconciliation. Omitted when none.
             ...(chunk_account_ids[idx]?.length ? { account_ids: chunk_account_ids[idx] } : {}),
+            // Section heading this chunk falls under (prose only). Omitted when none.
+            ...(chunk_headings[idx] ? { heading: chunk_headings[idx] } : {}),
           },
         }));
 
