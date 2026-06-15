@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Home, Search, Calendar, Settings, LogOut, Compass, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Home, Search, Calendar, Settings, LogOut, Compass, ChevronsLeft, ChevronsRight, PlusSquare } from "lucide-react";
 import { PMAvatar } from "@/components/ui/pm-avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { getUserDisplayName } from "@/lib/utils";
@@ -12,6 +12,7 @@ const navItems = [
   { icon: Home, label: "Dashboard", path: "/dashboard", shortcut: null },
   { icon: Search, label: "Search", path: "/search", shortcut: "K" },
   { icon: Calendar, label: "Meetings", path: "/dashboard", shortcut: null },
+  { icon: PlusSquare, label: "Create Issue", path: "/create-issue", shortcut: null },
   { icon: Settings, label: "Settings", path: "/settings", shortcut: null },
 ];
 
