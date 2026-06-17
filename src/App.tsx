@@ -9,7 +9,6 @@ import Landing from "./pages/Landing";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Search from "./pages/Search";
-import MeetingPrep from "./pages/MeetingPrep";
 import Settings from "./pages/Settings";
 import CreateIssue from "./pages/CreateIssue";
 import NotFound from "./pages/NotFound";
@@ -34,7 +33,6 @@ const App = () => (
             <Route path="/auth/linear/callback" element={<LinearCallback />} />
             <Route path="/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
             <Route path="/search" element={<ProtectedRoute><AppLayout><Search /></AppLayout></ProtectedRoute>} />
-            <Route path="/meeting-prep/:meetingId" element={<ProtectedRoute><AppLayout><MeetingPrep /></AppLayout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
             <Route path="/create-issue" element={<ProtectedRoute><AppLayout><CreateIssue /></AppLayout></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PMButton } from "@/components/ui/pm-button";
 import { PMSearchBar } from "@/components/ui/pm-search-bar";
-import { Compass, FolderOpen, FileText, Calendar, Check, Sparkles } from "lucide-react";
+import { Compass, FolderOpen, FileText, Check, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signInWithGoogle } from "@/lib/google-auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -44,12 +44,11 @@ const Onboarding = () => {
   const permissions = [
     { icon: FolderOpen, text: "Google Drive — Search your files" },
     { icon: FileText, text: "Google Docs — Read document content" },
-    { icon: Calendar, text: "Google Calendar — See your meetings" },
   ];
 
   const examplePrompts = [
     "Find my most recent PRD",
-    "What meetings do I have this week?",
+    "How many issues are in progress?",
     "Show me the Q3 roadmap",
   ];
 
@@ -122,7 +121,7 @@ const Onboarding = () => {
                   Connect your Google Workspace
                 </h1>
                 <p className="text-body text-muted-foreground mb-8 text-center">
-                  We'll need read-only access to search your documents and calendar.
+                  We'll need read-only access to search your documents.
                 </p>
 
                 <div className="space-y-3 mb-6">

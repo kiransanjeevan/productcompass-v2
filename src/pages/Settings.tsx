@@ -103,7 +103,6 @@ const Settings = () => {
   const connectedServices = [
     { name: "Google Drive", status: hasGoogleTokens ? "Connected" : "Not connected", email: userEmail },
     { name: "Google Docs", status: hasGoogleTokens ? "Connected" : "Not connected" },
-    { name: "Google Calendar", status: hasGoogleTokens ? "Connected" : "Not connected" },
   ];
 
   const getChunkParams = () => {
@@ -195,7 +194,6 @@ const Settings = () => {
     if (deleteConfirm !== "DELETE" || !user?.id) return;
     try {
       await supabase.from("document_chunks").delete().eq("user_id", user.id);
-      await supabase.from("meetings").delete().eq("user_id", user.id);
       await supabase.from("oauth_tokens").delete().eq("user_id", user.id);
       await supabase.from("profiles").delete().eq("id", user.id);
       await signOut();

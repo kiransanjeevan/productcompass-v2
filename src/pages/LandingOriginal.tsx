@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
 import { PMButton } from "@/components/ui/pm-button";
-import { FileText, Calendar, Lock, Shield, CheckCircle } from "lucide-react";
+import { FileText, Lock, Shield, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { signInWithGoogle } from "@/lib/google-auth";
 import { toast } from "sonner";
@@ -35,12 +35,6 @@ const Landing = () => {
       title: "Search in Plain English",
       description:
         "Ask questions like you would a colleague. PM Compass searches your Drive and synthesizes an answer from the most relevant docs.",
-    },
-    {
-      icon: Calendar,
-      title: "Prepare for Meetings",
-      description:
-        "Get automatically curated context before any meeting — relevant docs, past discussions, and key topics all in one place.",
     },
   ];
 

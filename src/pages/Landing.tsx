@@ -6,7 +6,6 @@ import { PMBadge } from "@/components/ui/pm-badge";
 import {
   Search,
   FileText,
-  Calendar,
   Lock,
   Shield,
   CheckCircle,
@@ -80,12 +79,6 @@ const Landing = () => {
       title: "Multi-Format Intelligence",
       description:
         "Paragraph chunking for prose, header-preserved row chunking for spreadsheets. Each format gets specialized treatment.",
-    },
-    {
-      icon: Calendar,
-      title: "Meeting Prep",
-      description:
-        "Auto-curated context before any meeting — relevant docs, past discussions, and key topics from your calendar events.",
     },
     {
       icon: FlaskConical,

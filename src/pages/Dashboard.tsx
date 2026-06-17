@@ -1,28 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { PMCard, PMCardHeader, PMCardTitle, PMCardContent, PMCardFooter } from "@/components/ui/pm-card";
-import { PMButton } from "@/components/ui/pm-button";
-import { PMBadge } from "@/components/ui/pm-badge";
 import { StaggerContainer, StaggerItem } from "@/components/ui/stagger-children";
-import { SkeletonShimmer } from "@/components/ui/skeleton-shimmer";
-import { Calendar, Clock, ChevronRight, Loader2, CheckCircle2, AlertTriangle, Search, CalendarDays } from "lucide-react";
+import { Calendar, Clock, Loader2, CheckCircle2, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserDisplayName } from "@/lib/utils";
-import { format, isToday, isTomorrow } from "date-fns";
 
 const RECENT_SEARCHES_KEY = "pm-compass-recent-searches";
 const INDEXED_FLAG_KEY = "pm-compass-indexed";
-
-function formatMeetingTime(startTime: string): string {
-  const date = new Date(startTime);
-  const timeStr = format(date, "h:mm a");
-  if (isToday(date)) return `Today at ${timeStr}`;
-  if (isTomorrow(date)) return `Tomorrow at ${timeStr}`;
-  return format(date, "EEE") + ` at ${timeStr}`;
-}
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -36,11 +24,6 @@ const Dashboard = () => {
   const [indexing, setIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState<{ processed: number; total: number } | null>(null);
   const [indexComplete, setIndexComplete] = useState(false);
-
-  // Meetings state
-  const [meetings, setMeetings] = useState<any[]>([]);
-  const [meetingsLoading, setMeetingsLoading] = useState(true);
-  const [meetingsError, setMeetingsError] = useState<string | null>(null);
 
   // Recent searches from localStorage
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -135,37 +118,6 @@ const Dashboard = () => {
     checkAndIndex();
   }, [user, hasGoogleTokens, runIndexing]);
 
-  // Sync calendar meetings
-  useEffect(() => {
-    if (!user || !hasGoogleTokens) return;
-    const syncMeetings = async () => {
-      setMeetingsLoading(true);
-      setMeetingsError(null);
-      try {
-        const { data, error } = await supabase.functions.invoke("sync-calendar");
-        if (error) {
-          if (error.message?.includes("401") || error.message?.includes("expired")) {
-            setMeetingsError("expired");
-          } else {
-            throw error;
-          }
-          return;
-        }
-        if (data?.error && (data.error.includes("expired") || data.error.includes("token"))) {
-          setMeetingsError("expired");
-          return;
-        }
-        setMeetings(data?.meetings || []);
-      } catch (err) {
-        console.error("Calendar sync error:", err);
-        setMeetingsError("failed");
-      } finally {
-        setMeetingsLoading(false);
-      }
-    };
-    syncMeetings();
-  }, [user, hasGoogleTokens]);
-
   const handleSearch = (query: string) => {
     const updated = [query, ...recentSearches.filter((s) => s !== query)].slice(0, 5);
     setRecentSearches(updated);
@@ -251,79 +203,8 @@ const Dashboard = () => {
           </button>
         </StaggerItem>
 
-        {/* Widgets Grid */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Upcoming Meetings */}
-          <StaggerItem className="h-full">
-            <PMCard hoverable className="flex flex-col h-full">
-              <PMCardHeader>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <PMCardTitle>Upcoming Meetings</PMCardTitle>
-                <PMBadge variant="info" className="text-[10px] ml-1">Beta</PMBadge>
-              </PMCardHeader>
-              <PMCardContent className="flex-1">
-                {meetingsLoading ? (
-                  <div className="space-y-3 py-2">
-                    <SkeletonShimmer className="h-10 w-full" />
-                    <SkeletonShimmer className="h-10 w-full" />
-                    <SkeletonShimmer className="h-10 w-3/4" />
-                  </div>
-                ) : meetingsError === "expired" ? (
-                  <div className="flex items-center gap-2 py-4 text-sm text-warning">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Your Google connection has expired. <button onClick={() => navigate("/settings")} className="underline hover:text-foreground">Reconnect in Settings</button>.</span>
-                  </div>
-                ) : meetingsError ? (
-                  <p className="text-sm text-muted-foreground py-4">Failed to load meetings.</p>
-                ) : meetings.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-                      <CalendarDays className="h-6 w-6 text-primary/60" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground mb-1">All clear this week</p>
-                    <p className="text-xs text-muted-foreground">No meetings in the next 7 days — time for deep work</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {meetings.slice(0, 3).map((meeting, index) => (
-                      <button
-                        key={meeting.id}
-                        onClick={() => navigate(`/meeting-prep/${meeting.id}`)}
-                        className="w-full flex items-center justify-between p-2.5 -mx-2 rounded-md hover:bg-white/5 transition-colors group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-0.5 h-8 rounded-full ${index === 0 && isToday(new Date(meeting.start_time)) ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                          <div className="flex flex-col items-start">
-                            <span className="text-sm text-foreground">{meeting.title}</span>
-                            {meeting.attendees && (
-                              <span className="text-xs text-muted-foreground">
-                                {Array.isArray(meeting.attendees) ? meeting.attendees.length : 0} attendees
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-small text-muted-foreground group-hover:text-foreground flex items-center gap-1">
-                          {formatMeetingTime(meeting.start_time)}
-                          <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </span>
-                      </button>
-                    ))}
-                    {meetings.length > 3 && (
-                      <p className="text-xs text-muted-foreground pt-1">
-                        +{meetings.length - 3} more this week
-                      </p>
-                    )}
-                  </div>
-                )}
-              </PMCardContent>
-              <PMCardFooter>
-                <button className="text-sm text-primary hover:underline">
-                  View full calendar
-                </button>
-              </PMCardFooter>
-            </PMCard>
-          </StaggerItem>
-
+        {/* Widgets */}
+        <div className="max-w-[560px] mx-auto">
           {/* Recent Searches */}
           <StaggerItem className="h-full">
             <PMCard hoverable className="flex flex-col h-full">
