@@ -7,6 +7,7 @@ export interface RegistryColumn {
   type: string;
   nullable: boolean;
   sample_values: string[];
+  enum?: boolean; // true when sample_values is the COMPLETE set of distinct values
 }
 
 export interface RegistryRow {
@@ -41,8 +42,12 @@ export function buildSchemaPrompt(rows: RegistryRow[]): string {
     .map((r) => {
       const cols = r.columns
         .map((c) => {
+          // Enum columns: show the COMPLETE value set so filters match exactly.
+          // Others: 3 samples (enough to fix casing/format).
           const samples = c.sample_values?.length
-            ? `  e.g. ${c.sample_values.slice(0, 3).join(", ")}`
+            ? (c.enum
+              ? `  one of: ${c.sample_values.join(", ")}`
+              : `  e.g. ${c.sample_values.slice(0, 3).join(", ")}`)
             : "";
           const nullable = c.nullable ? " (nullable)" : "";
           return `  ${c.name} ${c.type}${nullable}${samples}`;

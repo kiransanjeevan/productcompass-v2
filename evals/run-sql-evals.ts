@@ -10,10 +10,11 @@
 //     deno run --env-file=.env.evals --unsafely-ignore-certificate-errors=<host> \
 //     --allow-net --allow-read --allow-env evals/run-sql-evals.ts
 import { createPgClient } from "../supabase/functions/_shared/pg-client.ts";
-import { buildRegistrySummary, buildSchemaPrompt, type RegistryRow } from "../supabase/functions/search-documents/registry.ts";
-import { routeQuery } from "../supabase/functions/search-documents/router.ts";
-import { generateSql } from "../supabase/functions/search-documents/sql-generator.ts";
+import { buildSchemaPrompt, type RegistryRow } from "../supabase/functions/search-documents/registry.ts";
+import { routeAndGenerate } from "../supabase/functions/search-documents/route-and-generate.ts";
 import { runSql } from "../supabase/functions/search-documents/sql-executor.ts";
+import { synthesizeHybridAnswer, synthesizeSqlAnswer } from "../supabase/functions/search-documents/synthesis.ts";
+import { callClaude, HAIKU } from "../supabase/functions/_shared/anthropic.ts";
 
 interface Golden {
   id: string; query: string; expected_mode: string; result_type: string;
@@ -29,7 +30,6 @@ const sql = createPgClient();
 const reg = (await sql.unsafe(
   `SELECT table_name, document_title, row_count, columns FROM sheet_registry WHERE user_id=$1`, [UID],
 )) as unknown as RegistryRow[];
-const summary = buildRegistrySummary(reg);
 const schema = buildSchemaPrompt(reg);
 const allowed = reg.map((r) => r.table_name);
 // Map friendly titles → real table names so expected_tables can be compared.
@@ -50,26 +50,34 @@ const jaccard = (a: string[], b: string[]) => {
   return inter / new Set([...a, ...b]).size;
 };
 
+// Warm up TLS/DB connection so the first question isn't skewed by cold start.
+await callClaude({ apiKey: apiKey!, model: HAIKU, user: "hi", maxTokens: 5 });
+await sql.unsafe("SELECT 1");
+
 let routeHits = 0, execPass = 0, scalarTotal = 0, scalarHits = 0;
 const jaccards: number[] = [];
+const latencies: number[] = []; // full user-facing path per question (ms)
 
 for (const g of golden) {
-  const d = await routeQuery(g.query, summary, apiKey!);
-  const routeOk = d.mode === g.expected_mode;
+  const t0 = performance.now();
+  const plan = await routeAndGenerate(g.query, schema, apiKey!);
+  const planMs = Math.round(performance.now() - t0);
+  const routeOk = plan.mode === g.expected_mode;
   if (routeOk) routeHits++;
-  let detail = `route=${d.mode}${routeOk ? "✓" : `✗(want ${g.expected_mode})`}`;
+  let detail = `route=${plan.mode}${routeOk ? "✓" : `✗(want ${g.expected_mode})`}`;
+  let execMs = 0, synthMs = 0;
 
-  if (g.expected_mode !== "vector" && d.mode !== "vector") {
+  if (g.expected_mode !== "vector" && plan.mode !== "vector") {
     try {
-      const gen = await generateSql(g.query, schema, apiKey!, d.confidence < 0.7);
-      const exec = await runSql(sql, UID, gen.sql, allowed);
+      const tE = performance.now();
+      const exec = await runSql(sql, UID, plan.sql, allowed);
+      execMs = Math.round(performance.now() - tE);
       if (exec.error) {
         detail += ` exec=ERR(${exec.error})`;
       } else {
         execPass++;
-        // tables: map expected friendly names to real table names
         const wantTables = g.expected_tables.map((t) => titleToTable.get(t) ?? t);
-        const j = jaccard(gen.tables_used.map((t) => t.toLowerCase()), wantTables.map((t) => t.toLowerCase()));
+        const j = jaccard(plan.tables_used.map((t) => t.toLowerCase()), wantTables.map((t) => t.toLowerCase()));
         jaccards.push(j);
         detail += ` exec✓ rows=${exec.row_count} jaccard=${j.toFixed(2)}`;
         if (g.result_type === "scalar") {
@@ -82,11 +90,22 @@ for (const g of golden) {
         } else if (g.min_rows && (exec.row_count ?? 0) < g.min_rows) {
           detail += ` ⚠ rows<${g.min_rows}`;
         }
+        // Include answer synthesis so the timing reflects real user latency.
+        const tS = performance.now();
+        if (plan.mode === "hybrid") {
+          await synthesizeHybridAnswer(g.query, exec.rows ?? [], exec.row_count ?? 0, exec.truncated ?? false, [], apiKey!);
+        } else {
+          await synthesizeSqlAnswer(g.query, exec.rows ?? [], exec.row_count ?? 0, exec.truncated ?? false, apiKey!);
+        }
+        synthMs = Math.round(performance.now() - tS);
       }
     } catch (e) {
       detail += ` GEN-ERR(${(e as Error).message})`;
     }
   }
+  const totalMs = planMs + execMs + synthMs;
+  latencies.push(totalMs);
+  detail += `  [plan ${planMs} exec ${execMs} synth ${synthMs} = ${totalMs}ms]`;
   console.log(`${g.id.padEnd(7)} ${routeOk ? "✅" : "❌"} ${detail}`);
 }
 await sql.end();
@@ -94,8 +113,12 @@ await sql.end();
 const n = golden.length;
 const sqlN = golden.filter((g) => g.expected_mode !== "vector").length;
 const avgJ = jaccards.length ? (jaccards.reduce((a, b) => a + b, 0) / jaccards.length) : 0;
+const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+const pct = (a: number[], p: number) => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.ceil(p * s.length) - 1)]; };
 console.log("\n──────── SUMMARY ────────");
 console.log(`router_accuracy:    ${routeHits}/${n} (${(100 * routeHits / n).toFixed(0)}%)`);
 console.log(`sql_exec_pass_rate: ${execPass}/${sqlN} (${(100 * execPass / sqlN).toFixed(0)}%)`);
 console.log(`scalar_correctness: ${scalarHits}/${scalarTotal}`);
 console.log(`tables_used_jaccard (avg): ${avgJ.toFixed(2)}`);
+console.log(`latency ms — avg/p95/p99/max: ${Math.round(avg(latencies))} / ${pct(latencies, 0.95)} / ${pct(latencies, 0.99)} / ${Math.max(...latencies)}`);
+console.log(`(n=${latencies.length}; p95/p99 ≈ max at this sample size)`);

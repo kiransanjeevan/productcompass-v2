@@ -5,13 +5,10 @@
 // It owns its own Postgres connection (created lazily, closed in finally) so the
 // vector path pays nothing when the router picks vector.
 import { createPgClient } from "../_shared/pg-client.ts";
-import { type RegistryRow, buildRegistrySummary, buildSchemaPrompt } from "./registry.ts";
-import { routeQuery } from "./router.ts";
-import { generateSql } from "./sql-generator.ts";
+import { type RegistryRow, buildSchemaPrompt } from "./registry.ts";
+import { routeAndGenerate } from "./route-and-generate.ts";
 import { runSql } from "./sql-executor.ts";
 import { synthesizeHybridAnswer, synthesizeSqlAnswer } from "./synthesis.ts";
-
-const SONNET_CONFIDENCE_GATE = 0.7;
 
 /** A vector chunk carrying the account_ids it covers (from metadata). */
 export interface VectorChunk { chunk_text: string; account_ids: string[] }
@@ -63,29 +60,28 @@ export async function runSqlPath(
   if (!registryRows.length) return null; // no tables → vector
   const step = (s: string) => hooks.onStep?.(s);
 
-  step("routing");
-  const summary = buildRegistrySummary(registryRows);
-  const decision = await routeQuery(query, summary, anthropicKey);
-
-  // vector, or hybrid-while-disabled, both fall back to the existing path.
-  if (decision.mode === "vector") return null;
-  if (decision.mode === "hybrid" && !enableHybrid) return null;
-
   const allowed = registryRows.map((r) => r.table_name);
   const schema = buildSchemaPrompt(registryRows);
-  const useSonnet = decision.confidence < SONNET_CONFIDENCE_GATE;
+
+  // One Haiku call decides the mode AND writes the SQL (was two sequential calls).
+  step("generating_sql");
+  const plan = await routeAndGenerate(query, schema, anthropicKey);
+  const decision = plan; // same shape (mode/reason/confidence)
+
+  // vector, hybrid-while-disabled, or no SQL produced → fall back to vector.
+  if (plan.mode === "vector") return null;
+  if (plan.mode === "hybrid" && !enableHybrid) return null;
+  if (!plan.sql) return null;
 
   const pg = createPgClient();
   try {
-    step("generating_sql");
-    const gen = await generateSql(query, schema, anthropicKey, useSonnet);
     step("executing");
-    const exec = await runSql(pg, userId, gen.sql, allowed);
+    const exec = await runSql(pg, userId, plan.sql, allowed);
 
     // Executor rejected or DB errored → fall back to vector rather than show
     // the user an empty/confusing result.
     if (exec.error) {
-      console.error(`SQL path error (${gen.model}): ${exec.error} | sql: ${gen.sql}`);
+      console.error(`SQL path error (${plan.model}): ${exec.error} | sql: ${plan.sql}`);
       return null;
     }
 
@@ -133,10 +129,10 @@ export async function runSqlPath(
         router_reason: decision.reason,
         router_confidence: decision.confidence,
         sql: exec.sql_executed,
-        tables_used: gen.tables_used,
+        tables_used: plan.tables_used,
         row_count: exec.row_count,
         truncated: exec.truncated,
-        model: gen.model,
+        model: plan.model,
         exec_ms: exec.elapsed_ms,
         evidence_chunks: evidenceCount,
       },

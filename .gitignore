@@ -31,3 +31,18 @@ evals/results/*.json
 # Eval data (CSV datasets, not code)
 evals/data/
 .env.evals
+
+# Demo media, decks, and generated charts at repo root (large binaries / artifacts — not code)
+/*.mp4
+/*.mov
+/*.pptx
+/*.pdf
+/*.png
+/*.jpg
+/*.jpeg
+/*.csv
+/eval-chart.html
+/rag-pipeline-diagram.html
+
+# Personal build notes — contains live API keys, never commit
+BUILD_GUIDE.md

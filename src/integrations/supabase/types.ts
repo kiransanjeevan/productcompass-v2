@@ -62,57 +62,6 @@ export type Database = {
         }
         Relationships: []
       }
-      meetings: {
-        Row: {
-          attendees: Json | null
-          brief: string | null
-          brief_generated_at: string | null
-          calendar_event_id: string
-          created_at: string
-          description: string | null
-          end_time: string
-          id: string
-          meeting_url: string | null
-          relevant_document_ids: string[] | null
-          start_time: string
-          title: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          attendees?: Json | null
-          brief?: string | null
-          brief_generated_at?: string | null
-          calendar_event_id: string
-          created_at?: string
-          description?: string | null
-          end_time: string
-          id?: string
-          meeting_url?: string | null
-          relevant_document_ids?: string[] | null
-          start_time: string
-          title: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          attendees?: Json | null
-          brief?: string | null
-          brief_generated_at?: string | null
-          calendar_event_id?: string
-          created_at?: string
-          description?: string | null
-          end_time?: string
-          id?: string
-          meeting_url?: string | null
-          relevant_document_ids?: string[] | null
-          start_time?: string
-          title?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       oauth_tokens: {
         Row: {
           access_token: string

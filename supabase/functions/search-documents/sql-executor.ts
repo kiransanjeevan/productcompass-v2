@@ -129,12 +129,17 @@ export function validateAndRewrite(rawSql: string, allowedTables: string[]): Val
  *
  * Never throws — a rejected query or a DB error both come back as { error }.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function runSql(
   pg: PgClient,
   userId: string,
   rawSql: string,
   allowedTables: string[],
 ): Promise<ExecutorResult> {
+  // userId is inlined into the setup batch below, so it must be a real UUID.
+  if (!UUID_RE.test(userId)) return { error: "invalid user id", sql_executed: rawSql };
+
   const check = validateAndRewrite(rawSql, allowedTables);
   if (!check.ok) return { error: check.reason, sql_executed: rawSql };
 
@@ -142,13 +147,19 @@ export async function runSql(
   try {
     let rows: Record<string, unknown>[] = [];
     await pg.begin(async (tx: PgClient) => {
-      await tx.unsafe(`SET TRANSACTION READ ONLY`);
-      await tx.unsafe(`SET LOCAL statement_timeout = '5s'`);
-      await tx.unsafe(`SET LOCAL lock_timeout = '1s'`);
-      await tx.unsafe(`SET LOCAL idle_in_transaction_session_timeout = '5s'`);
-      await tx.unsafe(`SET LOCAL search_path = sheets`);
-      await tx.unsafe(`SELECT set_config('request.user_id', $1, true)`, [userId]);
-      await tx.unsafe(`SET LOCAL ROLE sheets_reader`);
+      // All session setup in ONE round-trip (was 7 separate trips). SET ROLE is
+      // last so the GUC + timeouts are set as the privileged role first. userId
+      // is inlined (UUID-validated above) because multi-statement batches can't
+      // bind parameters.
+      await tx.unsafe(
+        `SET TRANSACTION READ ONLY;` +
+        `SET LOCAL statement_timeout = '5s';` +
+        `SET LOCAL lock_timeout = '1s';` +
+        `SET LOCAL idle_in_transaction_session_timeout = '5s';` +
+        `SET LOCAL search_path = sheets;` +
+        `SELECT set_config('request.user_id', '${userId}', true);` +
+        `SET LOCAL ROLE sheets_reader;`,
+      );
       rows = (await tx.unsafe(check.sql)) as unknown as Record<string, unknown>[];
     });
     return {
