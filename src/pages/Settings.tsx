@@ -20,6 +20,7 @@ const Settings = () => {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [linearSyncing, setLinearSyncing] = useState(false);
   const [docCount, setDocCount] = useState<number | null>(null);
   const [fileCount, setFileCount] = useState<number | null>(null);
   const [hasGoogleTokens, setHasGoogleTokens] = useState(false);
@@ -102,7 +103,6 @@ const Settings = () => {
   const connectedServices = [
     { name: "Google Drive", status: hasGoogleTokens ? "Connected" : "Not connected", email: userEmail },
     { name: "Google Docs", status: hasGoogleTokens ? "Connected" : "Not connected" },
-    { name: "Google Calendar", status: hasGoogleTokens ? "Connected" : "Not connected" },
   ];
 
   const getChunkParams = () => {
@@ -153,6 +153,26 @@ const Settings = () => {
     }
   };
 
+  const handleLinearSync = async () => {
+    setLinearSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-linear");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      // Refresh chunk count — Linear issues land in document_chunks alongside Drive docs.
+      const { count } = await supabase
+        .from("document_chunks")
+        .select("id", { count: "exact", head: true });
+      setDocCount(count ?? 0);
+      toast.success(`Synced ${data?.issue_count ?? 0} Linear issues (${data?.rows ?? 0} rows materialized)`);
+    } catch (err) {
+      console.error("Linear sync error:", err);
+      toast.error("Failed to sync Linear issues.");
+    } finally {
+      setLinearSyncing(false);
+    }
+  };
+
   const handleDisconnect = async (service: string) => {
     if (user?.id) {
       // Scope the delete to the provider — the table now holds multiple providers.
@@ -174,7 +194,6 @@ const Settings = () => {
     if (deleteConfirm !== "DELETE" || !user?.id) return;
     try {
       await supabase.from("document_chunks").delete().eq("user_id", user.id);
-      await supabase.from("meetings").delete().eq("user_id", user.id);
       await supabase.from("oauth_tokens").delete().eq("user_id", user.id);
       await supabase.from("profiles").delete().eq("id", user.id);
       await signOut();
@@ -254,15 +273,22 @@ const Settings = () => {
                     </span>
                   </div>
                 </div>
-                {hasLinearTokens ? (
-                  <PMButton variant="secondary" size="sm" onClick={() => setDisconnectModal("Linear")}>
-                    Disconnect
+                {/* Sync runs on the server-side personal key, so it works with or
+                    without OAuth. OAuth only governs Connect/Disconnect + attribution. */}
+                <div className="flex items-center gap-2">
+                  <PMButton variant="primary" size="sm" onClick={handleLinearSync} loading={linearSyncing}>
+                    Sync Issues
                   </PMButton>
-                ) : (
-                  <PMButton variant="primary" size="sm" onClick={() => connectLinear()}>
-                    Connect
-                  </PMButton>
-                )}
+                  {hasLinearTokens ? (
+                    <PMButton variant="secondary" size="sm" onClick={() => setDisconnectModal("Linear")}>
+                      Disconnect
+                    </PMButton>
+                  ) : (
+                    <PMButton variant="secondary" size="sm" onClick={() => connectLinear()}>
+                      Connect
+                    </PMButton>
+                  )}
+                </div>
               </div>
             </div>
           </section>

@@ -292,6 +292,22 @@ function sampleValues(rows: string[][], colIndex: number, n: number): string[] {
   return out;
 }
 
+// For low-cardinality columns (status, priority, project, tier, …) the SQL
+// generator needs the COMPLETE set of values to filter exactly ("in progress" →
+// 'In Progress'); 3 random samples miss the relevant one. Returns the full
+// distinct set + isEnum=true when distinct count ≤ ENUM_MAX, else 3 samples.
+const ENUM_MAX = 25;
+function columnValueHints(rows: string[][], colIndex: number): { values: string[]; isEnum: boolean } {
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const v = row[colIndex];
+    if (v) seen.add(v);
+    if (seen.size > ENUM_MAX) return { values: sampleValues(rows, colIndex, 3), isEnum: false };
+  }
+  if (seen.size === 0) return { values: [], isEnum: false };
+  return { values: [...seen].sort(), isEnum: true };
+}
+
 async function insertAll(
   tx: PgClient,
   tableName: string,
@@ -394,12 +410,16 @@ export async function materializeCsvAsTable(
     await tx.unsafe(buildRlsBlock(tableName, userId));
   });
 
-  const columns = headers.map((h, i) => ({
-    name: h,
-    type: colTypes[i].sql,
-    nullable: colTypes[i].nullable,
-    sample_values: sampleValues(rows, i, 3),
-  }));
+  const columns = headers.map((h, i) => {
+    const hint = columnValueHints(rows, i);
+    return {
+      name: h,
+      type: colTypes[i].sql,
+      nullable: colTypes[i].nullable,
+      sample_values: hint.values,
+      ...(hint.isEnum ? { enum: true } : {}),
+    };
+  });
 
   await upsertRegistry(sql, {
     userId,

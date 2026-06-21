@@ -4,12 +4,11 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/drive.metadata.readonly",
   "https://www.googleapis.com/auth/drive.readonly",
   "https://www.googleapis.com/auth/documents.readonly",
-  "https://www.googleapis.com/auth/calendar.readonly",
 ].join(" ");
 
 /**
  * Sign in with Google via Supabase Auth.
- * Requests Drive + Calendar scopes in a single consent screen.
+ * Requests Drive (read-only) scopes in a single consent screen.
  * The provider_token (Google access token) is preserved in the session.
  */
 export async function signInWithGoogle(): Promise<{
